@@ -20,25 +20,30 @@ Satellite::GetTypeId()
         TypeId("ns3::Satellite")
             .SetParent<Node>()
             .SetGroupName("OrbitShield")
-            .AddConstructor<Satellite>()
-            .AddAttribute("Altitude",
-                          "Orbital altitude in meters",
-                          DoubleValue(400000.0),
-                          MakeDoubleAccessor(&Satellite::SetAltitude, &Satellite::GetAltitude),
-                          MakeDoubleChecker<double>(0.0))
-            .AddAttribute("Inclination",
-                          "Orbital inclination in degrees",
-                          DoubleValue(45.0),
-                          MakeDoubleAccessor(&Satellite::SetInclination, &Satellite::GetInclination),
-                          MakeDoubleChecker<double>(0.0, 180.0));
+            // .AddConstructor<Satellite>()
+            // .AddAttribute("Altitude",
+            //               "Orbital altitude in meters",
+            //               DoubleValue(400000.0),
+            //               MakeDoubleAccessor(&Satellite::SetAltitude, &Satellite::GetAltitude),
+            //               MakeDoubleChecker<double>(0.0))
+            // .AddAttribute("Inclination",
+            //               "Orbital inclination in degrees",
+            //               DoubleValue(45.0),
+            //               MakeDoubleAccessor(&Satellite::SetInclination, &Satellite::GetInclination),
+            //               MakeDoubleChecker<double>(0.0, 180.0));
+            ;
     return tid;
 }
 
-Satellite::Satellite()
-    : m_altitude(400000.0),
-      m_inclination(45.0)
+Satellite::Satellite(std::string& name, std::string& tle1, std::string& tle2)
+    : m_name(name), m_perturbSatellite(perturb::Satellite::from_tle(tle1, tle2))
 {
     NS_LOG_FUNCTION(this);
+    auto e = m_perturbSatellite.propagate_from_epoch(0, m_currentState);
+    if(e != perturb::Sgp4Error::NONE)
+    {
+        NS_LOG_ERROR("Error initializing satellite state from TLE: " << (int)e);
+    }
 }
 
 Satellite::~Satellite()
@@ -46,32 +51,26 @@ Satellite::~Satellite()
     NS_LOG_FUNCTION(this);
 }
 
-void
-Satellite::SetAltitude(double altitude)
-{
-    NS_LOG_FUNCTION(this << altitude);
-    m_altitude = altitude;
-}
 
-double
-Satellite::GetAltitude() const
+std::string
+Satellite::GetName() const
 {
     NS_LOG_FUNCTION(this);
-    return m_altitude;
+    return m_name;
 }
 
-void
-Satellite::SetInclination(double inclination)
-{
-    NS_LOG_FUNCTION(this << inclination);
-    m_inclination = inclination;
-}
-
-double
-Satellite::GetInclination() const
+Vector3D
+Satellite::GetPosition()
 {
     NS_LOG_FUNCTION(this);
-    return m_inclination;
+    perturb::StateVector sv;
+    auto e = m_perturbSatellite.propagate_from_epoch(0, sv);
+    if(e != perturb::Sgp4Error::NONE)
+    {
+        NS_LOG_ERROR("Error propagating satellite position: " << (int)e);
+        return Vector3D(0.0, 0.0, 0.0);
+    }
+    return Vector3D(sv.position[0], sv.position[1], sv.position[2]);
 }
 
 }  // namespace ns3

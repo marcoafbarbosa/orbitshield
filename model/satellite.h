@@ -7,6 +7,9 @@
 
 #include "ns3/core-module.h"
 #include "ns3/network-module.h"
+#include "ns3/vector.h"
+
+#include <perturb/perturb.hpp>
 
 namespace ns3
 {
@@ -30,7 +33,7 @@ class Satellite : public Node
     /**
      * \brief Constructor
      */
-    Satellite();
+    Satellite(std::string& name, std::string& tle1, std::string& tle2);
 
     /**
      * \brief Destructor
@@ -38,32 +41,21 @@ class Satellite : public Node
     ~Satellite() override;
 
     /**
-     * \brief Set the satellite's orbital altitude in meters
-     * \param altitude the altitude in meters
+     * \brief Get the satellite's name
+     * \return the satellite name
      */
-    void SetAltitude(double altitude);
+    std::string GetName() const;
 
     /**
-     * \brief Get the satellite's orbital altitude in meters
-     * \return the altitude in meters
+     * \brief Get the satellite's position in ECI coordinates
+     * \return the position as a Vector3d in meters
      */
-    double GetAltitude() const;
-
-    /**
-     * \brief Set the satellite's orbital inclination in degrees
-     * \param inclination the inclination in degrees
-     */
-    void SetInclination(double inclination);
-
-    /**
-     * \brief Get the satellite's orbital inclination in degrees
-     * \return the inclination in degrees
-     */
-    double GetInclination() const;
+    Vector3D GetPosition();
 
   private:
-    double m_altitude;     //!< Orbital altitude in meters
-    double m_inclination;  //!< Orbital inclination in degrees
+    std::string m_name;                     //!< Satellite name
+    perturb::Satellite m_perturbSatellite; //!< Perturb satellite object for orbital calculations
+    perturb::StateVector m_currentState;   //!< Current state of the satellite for position calculations
 };
 
 }  // namespace ns3

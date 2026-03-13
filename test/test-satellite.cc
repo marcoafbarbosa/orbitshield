@@ -33,21 +33,15 @@ SatelliteTestCase::~SatelliteTestCase()
 void
 SatelliteTestCase::DoRun()
 {
-    Ptr<Satellite> satellite = CreateObject<Satellite>();
+    // Let try simulating the orbit of the International Space Station
+    // Got TLE from Celestrak sometime around 2022-03-12
+    std::string ISS_NAME = "ISS (ZARYA)";
+    std::string ISS_TLE_1 = "1 25544U 98067A   22071.78032407  .00021395  00000-0  39008-3 0  9996";
+    std::string ISS_TLE_2 = "2 25544  51.6424  94.0370 0004047 256.5103  89.8846 15.49386383330227";
+    Ptr<Satellite> satellite = CreateObject<Satellite>(ISS_NAME, ISS_TLE_1, ISS_TLE_2);
 
-    // Test default altitude
-    NS_TEST_EXPECT_MSG_EQ(satellite->GetAltitude(), 400000.0, "Default altitude should be 400 km");
-
-    // Test setting altitude
-    satellite->SetAltitude(500000.0);
-    NS_TEST_EXPECT_MSG_EQ(satellite->GetAltitude(), 500000.0, "Altitude should be 500 km");
-
-    // Test default inclination
-    NS_TEST_EXPECT_MSG_EQ(satellite->GetInclination(), 45.0, "Default inclination should be 45 degrees");
-
-    // Test setting inclination
-    satellite->SetInclination(51.6);
-    NS_TEST_EXPECT_MSG_EQ(satellite->GetInclination(), 51.6, "Inclination should be 51.6 degrees");
+    // Test satellite name
+    NS_TEST_EXPECT_MSG_EQ(satellite->GetName(), ISS_NAME, "Satellite name should match");
 }
 
 /**

@@ -5,7 +5,7 @@
 /**
  * \file
  * \ingroup orbitshield
- * Simple example of creating and configuring satellites using OrbitShield
+ * Simple example of creating and configuring a single satellite using the OrbitShield module.
  */
 
 #include "ns3/core-module.h"
@@ -24,27 +24,17 @@ main(int argc, char* argv[])
 {
     LogComponentEnable("OrbitShieldExample", LOG_LEVEL_INFO);
 
-    NS_LOG_INFO("Creating satellite constellation...");
+    NS_LOG_INFO("Creating a single satellite...");
 
-    // Create a small satellite constellation with 3 satellites
-    std::vector<Ptr<Satellite>> constellation;
+    // Let try simulating the orbit of the International Space Station
+    // Got TLE from Celestrak sometime around 2022-03-12
+    std::string ISS_NAME = "ISS (ZARYA)";
+    std::string ISS_TLE_1 = "1 25544U 98067A   22071.78032407  .00021395  00000-0  39008-3 0  9996";
+    std::string ISS_TLE_2 = "2 25544  51.6424  94.0370 0004047 256.5103  89.8846 15.49386383330227";
+    Ptr<Satellite> satellite = CreateObject<Satellite>(ISS_NAME, ISS_TLE_1, ISS_TLE_2);
 
-    for (int i = 0; i < 3; ++i)
-    {
-        Ptr<Satellite> satellite = CreateObject<Satellite>();
-
-        // Configure satellite parameters
-        satellite->SetAltitude(400000.0 + i * 50000.0);  // Vary altitude
-        satellite->SetInclination(51.6);                 // ISS-like inclination
-
-        constellation.push_back(satellite);
-
-        NS_LOG_INFO("Created Satellite " << i << ": Altitude="
-                                         << satellite->GetAltitude() << "m, Inclination="
-                                         << satellite->GetInclination() << "°");
-    }
-
-    NS_LOG_INFO("Constellation created with " << constellation.size() << " satellites");
+    NS_LOG_INFO("Created Satellite " << satellite->GetName() << ": Position="
+                                        << satellite->GetPosition());
 
     return 0;
 }

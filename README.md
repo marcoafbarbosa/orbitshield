@@ -2,25 +2,23 @@
 
 ## Overview
 
-**OrbitShield** is an ns-3 module designed to simulate satellite constellations and their inter-satellite links (ISLs). It provides a comprehensive framework for modeling and analyzing satellite communication networks, including Low Earth Orbit (LEO), Medium Earth Orbit (MEO), and Geostationary Earth Orbit (GEO) constellations.
+**OrbitShield** is an ns-3 module designed to simulate satellite constellations and their inter-satellite links (ISLs). It provides a comprehensive framework for modeling and analyzing satellite communication networks focusing on Low Earth Orbit (LEO) constellations.
 
 ## Features
 
 ### Current Implementation
-- **Satellite Node Model**: Basic satellite node representation with orbital parameters
-- **Orbital Parameters**:
-  - Altitude configuration (in meters)
-  - Orbital inclination configuration (in degrees)
-- **Test Suite**: Unit tests for core satellite functionality
+- **Models**
+  - **Satellite Node**: Basic satellite node representation with orbital propagation capabilities
+  - **Constellation**: Collection of satellites with TLE file loading support
+- **Test Suite**: Unit tests for core satellite and constellation functionality
 - **Example Applications**: Basic examples demonstrating module usage
 
 ### Future Enhancements
 - Inter-satellite link (ISL) channel model
-- Orbital mechanics and position calculation
+- Orbital mechanics and position calculation (partially implemented)
 - Satellite handover mechanisms
 - Ground station connections
 - Coverage analysis tools
-- Constellation management helpers
 - Link budget calculations
 - Latency models based on orbital position
 
@@ -31,14 +29,27 @@ contrib/orbitshield/
 ├── model/
 │   ├── satellite.h              # Satellite node class definition
 │   ├── satellite.cc             # Satellite node implementation
+│   ├── constellation.h          # Constellation class definition
+│   ├── constellation.cc         # Constellation implementation
 │   └── orbitshield-module.h     # Module public interface
 ├── test/
-│   └── test-satellite.cc        # Unit tests
+│   ├── test-satellite.cc        # Satellite unit tests
+│   └── test-constellation.cc    # Constellation unit tests
 ├── examples/
-│   └── orbitshield-basic-example.cc  # Basic usage example
+│   ├── orbitshield-basic-example.cc      # Basic satellite usage
+│   ├── orbitshield-load-from-tle.cc      # Constellation loading example
+│   └── CMakeLists.txt                    # Examples build configuration
+├── data/
+│   └── iridium-20260312.txt    # Sample TLE data
 ├── CMakeLists.txt               # Build configuration
 └── README.md                     # This file
 ```
+
+## Dependencies
+
+This module has the following dependencies:
+
+- [perturb](https://github.com/gunvirranu/perturb): A modern C++11 wrapper for the SGP4 orbit propagator
 
 ## Installation
 
@@ -55,7 +66,9 @@ The build system will detect and compile the OrbitShield module along with other
 
 ## Basic Usage
 
-### Creating a Single Satellite
+### Creating a Single Satellite from TLE
+
+The `Satellite` class is initialized from Two-Line Element (TLE) data. Provide a `name` plus the two TLE lines to create a satellite instance.
 
 ```cpp
 #include "ns3/core-module.h"
@@ -65,22 +78,23 @@ using namespace ns3;
 
 int main()
 {
-    // Create a satellite
-    Ptr<Satellite> satellite = CreateObject<Satellite>();
-    
-    // Configure orbital parameters
-    satellite->SetAltitude(400000.0);      // 400 km altitude (ISS-like)
-    satellite->SetInclination(51.6);       // ISS-like inclination
-    
+    std::string name = "ISS (ZARYA)";
+    std::string tle1 = "1 25544U 98067A   22071.78032407  .00021395  00000-0  39008-3 0  9996";
+    std::string tle2 = "2 25544  51.6424  94.0370 0004047 256.5103  89.8846 15.49386383330227";
+
+    Ptr<Satellite> satellite = CreateObject<Satellite>(name, tle1, tle2);
+
     // Query satellite properties
-    std::cout << "Altitude: " << satellite->GetAltitude() << " m" << std::endl;
-    std::cout << "Inclination: " << satellite->GetInclination() << "°" << std::endl;
-    
+    std::cout << "Satellite: " << satellite->GetName() << std::endl;
+    std::cout << "Position (ECI): " << satellite->GetPosition() << std::endl;
+
     return 0;
 }
 ```
 
-### Creating a Constellation
+### Creating a Constellation from a TLE File
+
+`Constellation` provides a helper to load many satellites from a TLE file (e.g., `contrib/orbitshield/data/iridium-20260312.txt`).
 
 ```cpp
 #include "ns3/core-module.h"
@@ -90,20 +104,15 @@ using namespace ns3;
 
 int main()
 {
-    // Create a constellation with multiple satellites
-    std::vector<Ptr<Satellite>> constellation;
-    
-    for (int i = 0; i < 36; ++i)
+    Ptr<Constellation> constellation = CreateObject<Constellation>();
+    constellation->LoadFromTleFile("contrib/orbitshield/data/iridium-20260312.txt");
+
+    const auto& sats = constellation->GetSatellites();
+    for (const auto& sat : sats)
     {
-        Ptr<Satellite> sat = CreateObject<Satellite>();
-        sat->SetAltitude(550000.0);        // 550 km (typical LEO)
-        sat->SetInclination(53.0);          // Preferred inclination
-        constellation.push_back(sat);
+        std::cout << "Satellite " << sat->GetName() << " position=" << sat->GetPosition() << "\n";
     }
-    
-    NS_LOG_INFO("Created constellation with " << constellation.size() 
-                << " satellites");
-    
+
     return 0;
 }
 ```
@@ -114,8 +123,18 @@ To run the basic example:
 
 ```bash
 cd ns-3-dev
+./ns3 configure --enable-examples  # Enable examples during configuration
+./ns3 build
 ./ns3 run orbitshield-basic-example
 ```
+
+To run the constellation loading example:
+
+```bash
+./ns3 run orbitshield-load-from-tle
+```
+
+**Note**: Examples are not built by default in ns-3. You must configure with `--enable-examples` to include them in the build.
 
 ## API Reference
 
@@ -127,41 +146,46 @@ class Satellite : public Node
 public:
     // Type identification
     static TypeId GetTypeId();
-    
+
     // Constructor and Destructor
-    Satellite();
+    Satellite(std::string& name, std::string& tle1, std::string& tle2);
     ~Satellite();
-    
-    // Orbital Parameters
-    void SetAltitude(double altitude);
-    double GetAltitude() const;
-    
-    void SetInclination(double inclination);
-    double GetInclination() const;
+
+    // Satellite properties
+    std::string GetName() const;
+    Vector3D GetPosition();
 };
 ```
 
-#### Attributes
+### Constellation Class
 
-- **Altitude** (double, default: 400000.0 m)
-  - Orbital altitude above Earth's surface in meters
-  - Valid range: [0, ∞)
-  
-- **Inclination** (double, default: 45.0°)
-  - Orbital inclination relative to Earth's equator in degrees
-  - Valid range: [0°, 180°]
+```cpp
+class Constellation : public Object
+{
+public:
+    static TypeId GetTypeId();
+
+    Constellation();
+    ~Constellation();
+
+    void LoadFromTleFile(const std::string& filename);
+    const std::vector<Ptr<Satellite>>& GetSatellites() const;
+};
+```
 
 ## Testing
 
-Unit tests are included in `test/test-satellite.cc` and verify:
-- Satellite object creation
-- Default orbital parameter values
-- Setting and getting altitude
-- Setting and getting inclination
+Unit tests are included in `test/test-satellite.cc` and `test/test-constellation.cc` and verify:
+- Satellite object creation from TLE
+- Satellite name access
+- Position propagation via perturb
+- Constellation loading from TLE files
+- Satellite collection management
 
 Run the test suite:
 
 ```bash
+./ns3 configure --enable-tests
 ./ns3 run "test-runner --suite=orbitshield"
 ```
 
@@ -174,11 +198,14 @@ Currently uses absolute orbital parameters. Future versions may support:
 - Geographic (latitude/longitude/altitude) coordinates
 
 ### Orbital Mechanics
-The current implementation provides a foundation for orbital mechanics. Future versions will include:
-- Two-body orbit propagation
-- Kepler elements
-- Position/velocity calculations
-- Orbital decay and atmospheric drag models
+The current implementation provides basic orbital mechanics with:
+- TLE-based orbit propagation using the SGP4 model
+- Position calculations in Earth-Centered Inertial (ECI) coordinates
+- Future versions will include:
+  - Two-body orbit propagation
+  - Kepler elements
+  - Velocity calculations
+  - Orbital decay and atmospheric drag models
 
 ### Inter-Satellite Links
 The framework is designed to support ISL modeling with planned features:
@@ -227,7 +254,7 @@ OrbitShield module developed as part of the ns-3 project.
 
 ## Version
 
-**Version 0.1** - Initial bare-bones release with satellite node and orbital parameters.
+**Version 0.1** - Initial release with satellite node, constellation management, and TLE data loading capabilities.
 
 ## Support
 
