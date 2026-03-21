@@ -12,6 +12,8 @@
 #include "ns3/network-module.h"
 #include "ns3/orbitshield-module.h"
 
+#include <vector>
+
 using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE("OrbitShieldLoadFromTleExample");
@@ -42,6 +44,36 @@ main(int argc, char* argv[])
     }
 
     NS_LOG_INFO("Finished processing all satellites");
+
+    // Create ISL links with 2000 km max range
+    double maxRange = 2000000.0; // 2000 km in meters
+    auto links = constellation->CreateIslLinks(maxRange);
+
+    NS_LOG_INFO("Created " << links.size() << " ISL links");
+
+    // Print active ISLs only
+    std::size_t activeCount = 0;
+    for (const auto& link : links)
+    {
+        if (link->IsActive())
+        {
+            Ptr<SatelliteNetDevice> devA = DynamicCast<SatelliteNetDevice>(link->GetDevice(0));
+            Ptr<SatelliteNetDevice> devB = DynamicCast<SatelliteNetDevice>(link->GetDevice(1));
+            Ptr<Satellite> satA = DynamicCast<Satellite>(devA->GetNode());
+            Ptr<Satellite> satB = DynamicCast<Satellite>(devB->GetNode());
+            std::string nameA = satA->GetName();
+            std::string nameB = satB->GetName();
+
+            Ptr<MobilityModel> mobA = satA->GetObject<MobilityModel>();
+            Ptr<MobilityModel> mobB = satB->GetObject<MobilityModel>();
+            double distance = mobA->GetDistanceFrom(mobB) / 1000.0; // km
+
+            NS_LOG_INFO("ISL between " << nameA << " and " << nameB << ": active (distance: " << distance << " km)");
+            activeCount++;
+        }
+    }
+
+    NS_LOG_INFO("Total active ISLs: " << activeCount);
 
     return 0;
 }

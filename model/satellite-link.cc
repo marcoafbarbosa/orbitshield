@@ -97,6 +97,34 @@ SatelliteLink::GetPropagationDelayModel() const
 }
 
 bool
+SatelliteLink::IsActive() const
+{
+    NS_LOG_FUNCTION(this);
+
+    if (!m_deviceA || !m_deviceB)
+    {
+        return false;
+    }
+
+    Ptr<Node> srcNode = m_deviceA->GetNode();
+    Ptr<Node> dstNode = m_deviceB->GetNode();
+    if (!srcNode || !dstNode)
+    {
+        return false;
+    }
+
+    Ptr<MobilityModel> srcMob = srcNode->GetObject<MobilityModel>();
+    Ptr<MobilityModel> dstMob = dstNode->GetObject<MobilityModel>();
+    if (!srcMob || !dstMob)
+    {
+        return false;
+    }
+
+    double distance = srcMob->GetDistanceFrom(dstMob);
+    return distance <= m_maxRange;
+}
+
+bool
 SatelliteLink::Send(Ptr<NetDevice> source,
                      Ptr<Packet> packet,
                      const Address& dest,

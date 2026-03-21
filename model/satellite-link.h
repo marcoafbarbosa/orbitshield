@@ -36,6 +36,8 @@ class SatelliteLink : public Channel
     void SetPropagationDelayModel(Ptr<PropagationDelayModel> delayModel);
     Ptr<PropagationDelayModel> GetPropagationDelayModel() const;
 
+    bool IsActive() const;
+
     bool Send(Ptr<NetDevice> source,
               Ptr<Packet> packet,
               const Address& dest,
