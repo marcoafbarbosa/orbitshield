@@ -42,6 +42,19 @@ SatelliteTestCase::DoRun()
 
     // Test satellite name
     NS_TEST_EXPECT_MSG_EQ(satellite->GetName(), ISS_NAME, "Satellite name should match");
+
+    // Test time-aware position/velocity
+    Ptr<SatelliteMobilityModel> mobility = CreateObject<SatelliteMobilityModel>();
+    mobility->SetSatellite(satellite);
+    satellite->AggregateObject(mobility);
+
+    Vector pos0 = mobility->GetPosition();
+    // Evaluate at an explicit time point instead of changing simulator time directly.
+    Vector pos10 = satellite->GetPosition(Seconds(10.0));
+
+    NS_TEST_EXPECT_MSG_NE(pos0, pos10, "Position should change after 10 seconds");
+    Vector vel = mobility->GetVelocity();
+    NS_TEST_EXPECT_MSG_NE(vel, Vector(0.0, 0.0, 0.0), "Velocity should be non-zero in LEO");
 }
 
 /**

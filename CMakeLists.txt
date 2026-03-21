@@ -14,11 +14,13 @@ build_lib(
   LIBNAME orbitshield
   SOURCE_FILES
     model/satellite.cc
+    model/satellite-mobility-model.cc
     model/constellation.cc
   HEADER_FILES
     model/satellite.h
+    model/satellite-mobility-model.h
     model/constellation.h
-  LIBRARIES_TO_LINK ${libcore} ${libnetwork} perturb
+  LIBRARIES_TO_LINK ${libcore} ${libnetwork} ${libmobility} perturb
   TEST_SOURCES
     test/test-satellite.cc
     test/test-constellation.cc

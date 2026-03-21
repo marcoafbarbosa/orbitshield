@@ -9,6 +9,7 @@
 #include "ns3/network-module.h"
 
 #include "satellite.h"
+#include "satellite-mobility-model.h"
 #include "constellation.h"
 
 #endif /* NS3_ORBITSHIELD_MODULE_H */

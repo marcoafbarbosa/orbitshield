@@ -47,15 +47,29 @@ class Satellite : public Node
     std::string GetName() const;
 
     /**
-     * \brief Get the satellite's position in ECI coordinates
-     * \return the position as a Vector3d in meters
+     * \brief Get the satellite's position in ECI coordinates at a given time
+     * \param at the simulation time
+     * \return the position as a Vector3D in meters
+     */
+    Vector3D GetPosition(Time at) const;
+
+    /**
+     * \brief Get the satellite's velocity in ECI coordinates at a given time
+     * \param at the simulation time
+     * \return the velocity as a Vector3D in meters per second
+     */
+    Vector3D GetVelocity(Time at) const;
+
+    /**
+     * \brief Get the satellite's position in ECI at the current simulation time
+     * \return the position as a Vector3D in meters
      */
     Vector3D GetPosition();
 
   private:
     std::string m_name;                     //!< Satellite name
-    perturb::Satellite m_perturbSatellite; //!< Perturb satellite object for orbital calculations
-    perturb::StateVector m_currentState;   //!< Current state of the satellite for position calculations
+    mutable perturb::Satellite m_perturbSatellite; //!< Perturb satellite object for orbital calculations
+    mutable perturb::StateVector m_currentState;   //!< Current state of the satellite for position calculations
 };
 
 }  // namespace ns3

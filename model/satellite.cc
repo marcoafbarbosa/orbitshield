@@ -19,19 +19,7 @@ Satellite::GetTypeId()
     static TypeId tid =
         TypeId("ns3::Satellite")
             .SetParent<Node>()
-            .SetGroupName("OrbitShield")
-            // .AddConstructor<Satellite>()
-            // .AddAttribute("Altitude",
-            //               "Orbital altitude in meters",
-            //               DoubleValue(400000.0),
-            //               MakeDoubleAccessor(&Satellite::SetAltitude, &Satellite::GetAltitude),
-            //               MakeDoubleChecker<double>(0.0))
-            // .AddAttribute("Inclination",
-            //               "Orbital inclination in degrees",
-            //               DoubleValue(45.0),
-            //               MakeDoubleAccessor(&Satellite::SetInclination, &Satellite::GetInclination),
-            //               MakeDoubleChecker<double>(0.0, 180.0));
-            ;
+            .SetGroupName("OrbitShield");
     return tid;
 }
 
@@ -60,17 +48,41 @@ Satellite::GetName() const
 }
 
 Vector3D
+Satellite::GetPosition(Time at) const
+{
+    NS_LOG_FUNCTION(this << at);
+    perturb::StateVector sv;
+    double minutesFromEpoch = at.GetSeconds() / 60.0;
+    auto e = m_perturbSatellite.propagate_from_epoch(minutesFromEpoch, sv);
+    if(e != perturb::Sgp4Error::NONE)
+    {
+        NS_LOG_ERROR("Error propagating satellite position for " << at.GetSeconds() << "s : " << (int)e);
+        return Vector3D(0.0, 0.0, 0.0);
+    }
+    // convert from km to meters
+    return Vector3D(sv.position[0] * 1000.0, sv.position[1] * 1000.0, sv.position[2] * 1000.0);
+}
+
+Vector3D
+Satellite::GetVelocity(Time at) const
+{
+    NS_LOG_FUNCTION(this << at);
+    perturb::StateVector sv;
+    double minutesFromEpoch = at.GetSeconds() / 60.0;
+    auto e = m_perturbSatellite.propagate_from_epoch(minutesFromEpoch, sv);
+    if(e != perturb::Sgp4Error::NONE)
+    {
+        NS_LOG_ERROR("Error propagating satellite velocity for " << at.GetSeconds() << "s : " << (int)e);
+        return Vector3D(0.0, 0.0, 0.0);
+    }
+    return Vector3D(sv.velocity[0] * 1000.0, sv.velocity[1] * 1000.0, sv.velocity[2] * 1000.0);
+}
+
+Vector3D
 Satellite::GetPosition()
 {
     NS_LOG_FUNCTION(this);
-    perturb::StateVector sv;
-    auto e = m_perturbSatellite.propagate_from_epoch(0, sv);
-    if(e != perturb::Sgp4Error::NONE)
-    {
-        NS_LOG_ERROR("Error propagating satellite position: " << (int)e);
-        return Vector3D(0.0, 0.0, 0.0);
-    }
-    return Vector3D(sv.position[0], sv.position[1], sv.position[2]);
+    return GetPosition(Simulator::Now());
 }
 
 }  // namespace ns3
