@@ -14,6 +14,8 @@
 namespace ns3
 {
 
+class SatelliteLink;
+
 /**
  * \brief A constellation of satellites for orbital simulations
  *
@@ -50,6 +52,13 @@ class Constellation : public Object
      * \return Vector of satellite pointers
      */
     const std::vector<Ptr<Satellite>>& GetSatellites() const;
+
+    /**
+     * \brief Create pairwise ISL links between each satellite pair in the constellation.
+     * \param maxRange maximum distance (meters) for active links.
+     * \return vector of created links.
+     */
+    std::vector<Ptr<SatelliteLink>> CreateIslLinks(double maxRange);
 
   private:
     std::vector<Ptr<Satellite>> m_satellites; //!< Collection of satellites in the constellation

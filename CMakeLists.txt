@@ -13,15 +13,22 @@ FetchContent_MakeAvailable(perturb)
 build_lib(
   LIBNAME orbitshield
   SOURCE_FILES
-    model/satellite.cc
-    model/satellite-mobility-model.cc
     model/constellation.cc
+    model/isl-propagation-delay-model.cc
+    model/satellite-link.cc
+    model/satellite-mobility-model.cc
+    model/satellite-net-device.cc
+    model/satellite.cc
   HEADER_FILES
-    model/satellite.h
-    model/satellite-mobility-model.h
     model/constellation.h
-  LIBRARIES_TO_LINK ${libcore} ${libnetwork} ${libmobility} perturb
+    model/isl-propagation-delay-model.h
+    model/satellite-link.h
+    model/satellite-mobility-model.h
+    model/satellite-net-device.h
+    model/satellite.h
+  LIBRARIES_TO_LINK ${libcore} ${libnetwork} ${libmobility} ${libpropagation} perturb
   TEST_SOURCES
-    test/test-satellite.cc
     test/test-constellation.cc
+    test/test-isl.cc
+    test/test-satellite.cc
 )

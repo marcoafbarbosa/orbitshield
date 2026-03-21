@@ -10,6 +10,9 @@
 
 #include "satellite.h"
 #include "satellite-mobility-model.h"
+#include "satellite-channel.h"
+#include "satellite-net-device.h"
+#include "isl-propagation-delay-model.h"
 #include "constellation.h"
 
 #endif /* NS3_ORBITSHIELD_MODULE_H */

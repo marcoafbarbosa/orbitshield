@@ -3,6 +3,10 @@
  */
 
 #include "constellation.h"
+#include "satellite-link.h"
+#include "satellite-net-device.h"
+#include "isl-propagation-delay-model.h"
+#include "satellite-mobility-model.h"
 
 #include "ns3/log.h"
 
@@ -94,6 +98,53 @@ Constellation::GetSatellites() const
 {
     NS_LOG_FUNCTION(this);
     return m_satellites;
+}
+
+std::vector<Ptr<SatelliteLink>>
+Constellation::CreateIslLinks(double maxRange)
+{
+    NS_LOG_FUNCTION(this << maxRange);
+
+    std::vector<Ptr<SatelliteLink>> links;
+
+    for (std::size_t i = 0; i < m_satellites.size(); ++i)
+    {
+        for (std::size_t j = i + 1; j < m_satellites.size(); ++j)
+        {
+            Ptr<Satellite> satA = m_satellites[i];
+            Ptr<Satellite> satB = m_satellites[j];
+
+            Ptr<SatelliteNetDevice> devA = CreateObject<SatelliteNetDevice>();
+            Ptr<SatelliteNetDevice> devB = CreateObject<SatelliteNetDevice>();
+
+            devA->SetNode(satA);
+            devB->SetNode(satB);
+
+            if (!satA->GetObject<SatelliteMobilityModel>())
+            {
+                Ptr<SatelliteMobilityModel> mobility = CreateObject<SatelliteMobilityModel>();
+                mobility->SetSatellite(satA);
+                satA->AggregateObject(mobility);
+            }
+            if (!satB->GetObject<SatelliteMobilityModel>())
+            {
+                Ptr<SatelliteMobilityModel> mobility = CreateObject<SatelliteMobilityModel>();
+                mobility->SetSatellite(satB);
+                satB->AggregateObject(mobility);
+            }
+
+            satA->AddDevice(devA);
+            satB->AddDevice(devB);
+
+            Ptr<SatelliteLink> link = CreateObject<SatelliteLink>(devA, devB);
+            link->SetMaxRange(maxRange);
+            link->SetPropagationDelayModel(CreateObject<IslPropagationDelayModel>());
+
+            links.push_back(link);
+        }
+    }
+
+    return links;
 }
 
 }  // namespace ns3

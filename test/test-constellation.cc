@@ -71,7 +71,7 @@ class ConstellationTestSuite : public TestSuite
 };
 
 ConstellationTestSuite::ConstellationTestSuite()
-    : TestSuite("constellation", Type::UNIT)
+    : TestSuite("orbitshield-constellation", Type::UNIT)
 {
     AddTestCase(new ConstellationTestCase(), Duration::QUICK);
 }

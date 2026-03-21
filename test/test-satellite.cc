@@ -67,7 +67,7 @@ class OrbitShieldTestSuite : public TestSuite
 };
 
 OrbitShieldTestSuite::OrbitShieldTestSuite()
-    : TestSuite("orbitshield", Type::UNIT)
+    : TestSuite("orbitshield-sat", Type::UNIT)
 {
     AddTestCase(new SatelliteTestCase(), Duration::QUICK);
 }
