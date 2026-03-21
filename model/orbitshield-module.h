@@ -8,9 +8,10 @@
 #include "ns3/core-module.h"
 #include "ns3/network-module.h"
 
+#include "orbitshield-utils.h"
 #include "satellite.h"
+#include "satellite-link.h"
 #include "satellite-mobility-model.h"
-#include "satellite-channel.h"
 #include "satellite-net-device.h"
 #include "isl-propagation-delay-model.h"
 #include "constellation.h"

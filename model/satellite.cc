@@ -3,6 +3,7 @@
  */
 
 #include "satellite.h"
+#include "orbitshield-utils.h"
 
 #include "ns3/log.h"
 
@@ -23,11 +24,14 @@ Satellite::GetTypeId()
     return tid;
 }
 
-Satellite::Satellite(std::string& name, std::string& tle1, std::string& tle2)
-    : m_name(name), m_perturbSatellite(perturb::Satellite::from_tle(tle1, tle2))
+Satellite::Satellite(const std::string& name, std::string& tle1, std::string& tle2, perturb::JulianDate simulationStartJD)
+    : m_name(name), m_perturbSatellite(perturb::Satellite::from_tle(tle1, tle2)), m_simulationStartJD(simulationStartJD)
 {
     NS_LOG_FUNCTION(this);
-    auto e = m_perturbSatellite.propagate_from_epoch(0, m_currentState);
+    NS_LOG_INFO("Creating Satellite " << m_name << " with simulation start: " << JulianDateToString(m_simulationStartJD));
+    auto tleEpoch = m_perturbSatellite.epoch();
+    double delta_to_start = (tleEpoch - m_simulationStartJD) * 1440.0;
+    auto e = m_perturbSatellite.propagate_from_epoch(delta_to_start, m_currentState);
     if(e != perturb::Sgp4Error::NONE)
     {
         NS_LOG_ERROR("Error initializing satellite state from TLE: " << (int)e);
@@ -52,8 +56,13 @@ Satellite::GetPosition(Time at) const
 {
     NS_LOG_FUNCTION(this << at);
     perturb::StateVector sv;
-    double minutesFromEpoch = at.GetSeconds() / 60.0;
-    auto e = m_perturbSatellite.propagate_from_epoch(minutesFromEpoch, sv);
+
+    // Calculate the real Julian date for the requested simulation time
+    perturb::JulianDate realJD = m_simulationStartJD + at.GetSeconds() / 86400.0;
+    // Calculate time difference in minutes from TLE epoch to real time
+    auto tleEpoch = m_perturbSatellite.epoch();
+    double timeDeltaFromTleEpoch = (realJD - tleEpoch) * 1440.0;
+    auto e = m_perturbSatellite.propagate_from_epoch(timeDeltaFromTleEpoch, sv);
     if(e != perturb::Sgp4Error::NONE)
     {
         NS_LOG_ERROR("Error propagating satellite position for " << at.GetSeconds() << "s : " << (int)e);
@@ -68,7 +77,11 @@ Satellite::GetVelocity(Time at) const
 {
     NS_LOG_FUNCTION(this << at);
     perturb::StateVector sv;
-    double minutesFromEpoch = at.GetSeconds() / 60.0;
+    // Calculate the real Julian date for the requested simulation time
+    perturb::JulianDate realJD = m_simulationStartJD + at.GetSeconds() / 86400.0;
+    // Calculate time difference in minutes from TLE epoch to real time
+    auto tleEpoch = m_perturbSatellite.epoch();
+    double minutesFromEpoch = (realJD - tleEpoch) * 1440.0;
     auto e = m_perturbSatellite.propagate_from_epoch(minutesFromEpoch, sv);
     if(e != perturb::Sgp4Error::NONE)
     {

@@ -7,6 +7,7 @@
 #include "satellite-net-device.h"
 #include "isl-propagation-delay-model.h"
 #include "satellite-mobility-model.h"
+#include "orbitshield-utils.h"
 
 #include "ns3/log.h"
 
@@ -18,6 +19,13 @@ namespace ns3
 NS_LOG_COMPONENT_DEFINE("Constellation");
 
 NS_OBJECT_ENSURE_REGISTERED(Constellation);
+
+struct TleData
+{
+    std::string name;
+    std::string line1;
+    std::string line2;
+};
 
 TypeId
 Constellation::GetTypeId()
@@ -50,10 +58,12 @@ Constellation::LoadFromTleFile(const std::string& filename)
         return;
     }
 
+    std::vector<TleData> tleDataList;
     std::string line;
     std::string currentName;
     std::string currentLine1;
 
+    // First pass: collect all TLE data
     while (std::getline(file, line))
     {
         // Remove carriage return if present (Windows line endings)
@@ -78,10 +88,7 @@ Constellation::LoadFromTleFile(const std::string& filename)
         // Line 2 starts with "2"
         else if (line[0] == '2' && !currentName.empty() && !currentLine1.empty())
         {
-            Ptr<Satellite> satellite = CreateObject<Satellite>(currentName, currentLine1, line);
-            m_satellites.push_back(satellite);
-
-            NS_LOG_INFO("Loaded satellite: " << currentName);
+            tleDataList.push_back({currentName, currentLine1, line});
 
             // Reset for next satellite
             currentName.clear();
@@ -90,7 +97,38 @@ Constellation::LoadFromTleFile(const std::string& filename)
     }
 
     file.close();
-    NS_LOG_INFO("Loaded " << m_satellites.size() << " satellites from " << filename);
+
+    if (tleDataList.empty())
+    {
+        NS_LOG_WARN("No valid TLE data found in file: " << filename);
+        return;
+    }
+
+    // Find the minimum epoch
+    perturb::JulianDate minEpoch(perturb::DateTime(2100, 1, 1, 0, 0, 0)); // Start with a far future date
+    for (const auto& tleData : tleDataList)
+    {
+        std::string line1 = tleData.line1;
+        std::string line2 = tleData.line2;
+        perturb::Satellite tempSat = perturb::Satellite::from_tle(line1, line2);
+        const perturb::JulianDate epoch = tempSat.epoch();
+        if (epoch < minEpoch)
+        {
+            minEpoch = epoch;
+        }
+    }
+    m_simulationStartJD = minEpoch;
+
+    // Second pass: create satellites
+    for (auto& tleData : tleDataList)
+    {
+        Ptr<Satellite> satellite = CreateObject<Satellite>(tleData.name, tleData.line1, tleData.line2, m_simulationStartJD);
+        m_satellites.push_back(satellite);
+
+        NS_LOG_INFO("Loaded satellite: " << tleData.name);
+    }
+
+    NS_LOG_INFO("Loaded " << m_satellites.size() << " satellites from " << filename << " with simulation start at " << JulianDateToString(m_simulationStartJD));
 }
 
 const std::vector<Ptr<Satellite>>&

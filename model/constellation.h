@@ -9,6 +9,8 @@
 #include "ns3/network-module.h"
 #include "satellite.h"
 
+#include <perturb/perturb.hpp>
+
 #include <vector>
 
 namespace ns3
@@ -62,6 +64,7 @@ class Constellation : public Object
 
   private:
     std::vector<Ptr<Satellite>> m_satellites; //!< Collection of satellites in the constellation
+    perturb::JulianDate m_simulationStartJD;  //!< Global simulation start time
 };
 
 }  // namespace ns3

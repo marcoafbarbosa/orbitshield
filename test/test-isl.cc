@@ -49,8 +49,15 @@ IslChannelTestCase::DoRun()
     std::string tle2_line1 = "1 24795U 97020D   26071.62611496  .00005035  00000-0  38599-3 0  9996";
     std::string tle2_line2 = "2 24795  86.3893 319.6474 0099647 252.3257 106.7076 14.97664148525594";
 
-    Ptr<Satellite> sat1 = CreateObject<Satellite>(name1, tle1_line1, tle1_line2);
-    Ptr<Satellite> sat2 = CreateObject<Satellite>(name2, tle2_line1, tle2_line2);
+    // Get TLE epochs and find the minimum to use as simulation start
+    perturb::Satellite tempSat1 = perturb::Satellite::from_tle(tle1_line1, tle1_line2);
+    perturb::Satellite tempSat2 = perturb::Satellite::from_tle(tle2_line1, tle2_line2);
+    perturb::JulianDate epoch1 = tempSat1.epoch();
+    perturb::JulianDate epoch2 = tempSat2.epoch();
+    perturb::JulianDate simulationStartJD = ((epoch1 - epoch2) < 0) ? epoch1 : epoch2;
+
+    Ptr<Satellite> sat1 = CreateObject<Satellite>(name1, tle1_line1, tle1_line2, simulationStartJD);
+    Ptr<Satellite> sat2 = CreateObject<Satellite>(name2, tle2_line1, tle2_line2, simulationStartJD);
 
     Ptr<SatelliteNetDevice> dev1 = CreateObject<SatelliteNetDevice>();
     Ptr<SatelliteNetDevice> dev2 = CreateObject<SatelliteNetDevice>();

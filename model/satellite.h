@@ -33,7 +33,7 @@ class Satellite : public Node
     /**
      * \brief Constructor
      */
-    Satellite(std::string& name, std::string& tle1, std::string& tle2);
+    Satellite(const std::string& name, std::string& tle1, std::string& tle2, perturb::JulianDate simulationStartJD);
 
     /**
      * \brief Destructor
@@ -67,9 +67,10 @@ class Satellite : public Node
     Vector3D GetPosition();
 
   private:
-    std::string m_name;                     //!< Satellite name
+    const std::string m_name;                     //!< Satellite name
     mutable perturb::Satellite m_perturbSatellite; //!< Perturb satellite object for orbital calculations
     mutable perturb::StateVector m_currentState;   //!< Current state of the satellite for position calculations
+    perturb::JulianDate m_simulationStartJD;       //!< Simulation start time in Julian date
 };
 
 }  // namespace ns3

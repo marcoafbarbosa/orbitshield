@@ -46,7 +46,7 @@ main(int argc, char* argv[])
     NS_LOG_INFO("Finished processing all satellites");
 
     // Create ISL links with 2000 km max range
-    double maxRange = 2000000.0; // 2000 km in meters
+    double maxRange = 1000000.0; // 1000 km in meters
     auto links = constellation->CreateIslLinks(maxRange);
 
     NS_LOG_INFO("Created " << links.size() << " ISL links");

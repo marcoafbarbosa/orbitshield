@@ -31,7 +31,12 @@ main(int argc, char* argv[])
     std::string ISS_NAME = "ISS (ZARYA)";
     std::string ISS_TLE_1 = "1 25544U 98067A   22071.78032407  .00021395  00000-0  39008-3 0  9996";
     std::string ISS_TLE_2 = "2 25544  51.6424  94.0370 0004047 256.5103  89.8846 15.49386383330227";
-    Ptr<Satellite> satellite = CreateObject<Satellite>(ISS_NAME, ISS_TLE_1, ISS_TLE_2);
+
+    // Get the TLE epoch as simulation start time
+    perturb::Satellite tempSat = perturb::Satellite::from_tle(ISS_TLE_1, ISS_TLE_2);
+    perturb::JulianDate simulationStartJD = tempSat.epoch();
+
+    Ptr<Satellite> satellite = CreateObject<Satellite>(ISS_NAME, ISS_TLE_1, ISS_TLE_2, simulationStartJD);
 
     NS_LOG_INFO("Created Satellite " << satellite->GetName() << ": Position="
                                         << satellite->GetPosition());
