@@ -20,6 +20,9 @@ class SatelliteTestCase : public TestCase
 
   private:
     void DoRun() override;
+
+    void TestSimple();
+    void TestWithConstellation();
 };
 
 #endif /* TEST_SATELLITE_H */

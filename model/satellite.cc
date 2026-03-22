@@ -102,4 +102,23 @@ Satellite::GetPosition()
     return GetPosition(Simulator::Now());
 }
 
+Time Satellite::GetTleEpochTime() const
+{
+    NS_LOG_FUNCTION(this);
+    auto epochJD = m_perturbSatellite.epoch();
+    // Convert Julian date to Time (seconds since simulation start)
+    double secondsSinceStart = (epochJD - m_simulationStartJD) * 24.0 * 60.0 * 60.0;
+    return Time(secondsSinceStart);
+}
+
+perturb::ClassicalOrbitalElements Satellite::GetOrbitalElements() const
+{
+    NS_LOG_FUNCTION(this);
+    perturb::StateVector sv{};
+    sv.position = {0.0, 0.0, 0.0};
+    sv.velocity = {0.0, 0.0, 0.0};
+    m_perturbSatellite.propagate_from_epoch(0.0, sv);
+    return perturb::ClassicalOrbitalElements(sv);
+}
+
 }  // namespace ns3

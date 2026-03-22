@@ -66,6 +66,18 @@ class Satellite : public Node
      */
     Vector3D GetPosition();
 
+    /**
+     * \brief Get the satellite's epoch time
+     * \return the epoch time as a Time object
+     */
+    Time GetTleEpochTime() const;
+
+    /**
+     * \brief Get the satellite's classical orbital elements at the current simulation time
+     * \return the orbital elements as a perturb::ClassicalOrbitalElements struct
+     */
+    perturb::ClassicalOrbitalElements GetOrbitalElements() const;
+
   private:
     const std::string m_name;                     //!< Satellite name
     mutable perturb::Satellite m_perturbSatellite; //!< Perturb satellite object for orbital calculations
