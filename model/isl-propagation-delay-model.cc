@@ -45,6 +45,7 @@ IslPropagationDelayModel::GetDelay(Ptr<MobilityModel> a, Ptr<MobilityModel> b) c
 
     double distance = a->GetDistanceFrom(b); // meters
     static const double c = 299792458.0;     // speed of light m/s
+    NS_LOG_INFO("Calculated ISL delay: distance=" << distance << " m, delay=" << (distance / c) << " s");
     return Seconds(distance / c);
 }
 

@@ -2,8 +2,8 @@
  * Copyright (c) 2026 Marco A. F. Barbosa
  */
 
+#include "test-constellation.h"
 #include "ns3/orbitshield-module.h"
-
 #include "ns3/test.h"
 
 #include <cstdio>
@@ -14,15 +14,6 @@ using namespace ns3;
 /**
  * \brief Test suite for Constellation class
  */
-class ConstellationTestCase : public TestCase
-{
-  public:
-    ConstellationTestCase();
-    ~ConstellationTestCase() override;
-
-  private:
-    void DoRun() override;
-};
 
 ConstellationTestCase::ConstellationTestCase()
     : TestCase("Test Constellation loading from TLE")
@@ -60,21 +51,3 @@ ConstellationTestCase::DoRun()
     // Clean up the temporary file
     std::remove(filename);
 }
-
-/**
- * \brief Test suite for Constellation module
- */
-class ConstellationTestSuite : public TestSuite
-{
-  public:
-    ConstellationTestSuite();
-};
-
-ConstellationTestSuite::ConstellationTestSuite()
-    : TestSuite("orbitshield-constellation", Type::UNIT)
-{
-    AddTestCase(new ConstellationTestCase(), Duration::QUICK);
-}
-
-// Create a static variable to instantiate the test suite
-static ConstellationTestSuite constellationTestSuite;

@@ -2,25 +2,13 @@
  * Copyright (c) 2026 Marco A. F. Barbosa
  */
 
+#include "test-isl.h"
 #include "ns3/orbitshield-module.h"
 #include "ns3/test.h"
 #include "ns3/simulator.h"
 #include "ns3/log.h"
 
 using namespace ns3;
-
-class IslChannelTestCase : public TestCase
-{
-  public:
-    IslChannelTestCase();
-    ~IslChannelTestCase() override;
-
-  private:
-    void DoRun() override;
-    bool OnReceive(Ptr<NetDevice> device, Ptr<const Packet> packet, uint16_t protocol, const Address& src);
-
-    bool m_received;
-};
 
 IslChannelTestCase::IslChannelTestCase()
     : TestCase("Test ISL channel distance threshold and delay"), m_received(false)
@@ -54,7 +42,7 @@ IslChannelTestCase::DoRun()
     perturb::Satellite tempSat2 = perturb::Satellite::from_tle(tle2_line1, tle2_line2);
     perturb::JulianDate epoch1 = tempSat1.epoch();
     perturb::JulianDate epoch2 = tempSat2.epoch();
-    perturb::JulianDate simulationStartJD = ((epoch1 - epoch2) < 0) ? epoch1 : epoch2;
+    perturb::JulianDate simulationStartJD = (epoch1 > epoch2) ? epoch1 : epoch2;
 
     Ptr<Satellite> sat1 = CreateObject<Satellite>(name1, tle1_line1, tle1_line2, simulationStartJD);
     Ptr<Satellite> sat2 = CreateObject<Satellite>(name2, tle2_line1, tle2_line2, simulationStartJD);
@@ -106,17 +94,3 @@ IslChannelTestCase::DoRun()
 
     NS_TEST_EXPECT_MSG_EQ(m_received, false, "packet should not be received when distance > maxRange");
 }
-
-class OrbitShieldIslTestSuite : public TestSuite
-{
-  public:
-    OrbitShieldIslTestSuite();
-};
-
-OrbitShieldIslTestSuite::OrbitShieldIslTestSuite()
-    : TestSuite("orbitshield-isl", Type::UNIT)
-{
-    AddTestCase(new IslChannelTestCase(), Duration::QUICK);
-}
-
-static OrbitShieldIslTestSuite orbitshieldIslTestSuite;

@@ -2,24 +2,11 @@
  * Copyright (c) 2026 Marco A. F. Barbosa
  */
 
+#include "test-satellite.h"
 #include "ns3/orbitshield-module.h"
-
 #include "ns3/test.h"
 
 using namespace ns3;
-
-/**
- * \brief Test suite for Satellite class
- */
-class SatelliteTestCase : public TestCase
-{
-  public:
-    SatelliteTestCase();
-    ~SatelliteTestCase() override;
-
-  private:
-    void DoRun() override;
-};
 
 SatelliteTestCase::SatelliteTestCase()
     : TestCase("Test Satellite basic functionality")
@@ -61,21 +48,3 @@ SatelliteTestCase::DoRun()
     Vector vel = mobility->GetVelocity();
     NS_TEST_EXPECT_MSG_NE(vel, Vector(0.0, 0.0, 0.0), "Velocity should be non-zero in LEO");
 }
-
-/**
- * \brief Test suite for OrbitShield module
- */
-class OrbitShieldTestSuite : public TestSuite
-{
-  public:
-    OrbitShieldTestSuite();
-};
-
-OrbitShieldTestSuite::OrbitShieldTestSuite()
-    : TestSuite("orbitshield-sat", Type::UNIT)
-{
-    AddTestCase(new SatelliteTestCase(), Duration::QUICK);
-}
-
-// Create a static variable to instantiate the test suite
-static OrbitShieldTestSuite orbitshieldTestSuite;

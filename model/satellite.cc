@@ -55,10 +55,12 @@ Vector3D
 Satellite::GetPosition(Time at) const
 {
     NS_LOG_FUNCTION(this << at);
-    perturb::StateVector sv;
+    perturb::StateVector sv{};
+    sv.position = {0.0, 0.0, 0.0};
+    sv.velocity = {0.0, 0.0, 0.0};
 
     // Calculate the real Julian date for the requested simulation time
-    perturb::JulianDate realJD = m_simulationStartJD + at.GetSeconds() / 86400.0;
+    perturb::JulianDate realJD = m_simulationStartJD + at.GetSeconds() / (24.0 * 60.0 * 60.0);
     // Calculate time difference in minutes from TLE epoch to real time
     auto tleEpoch = m_perturbSatellite.epoch();
     double timeDeltaFromTleEpoch = (realJD - tleEpoch) * 1440.0;
@@ -76,7 +78,9 @@ Vector3D
 Satellite::GetVelocity(Time at) const
 {
     NS_LOG_FUNCTION(this << at);
-    perturb::StateVector sv;
+    perturb::StateVector sv{};
+    sv.position = {0.0, 0.0, 0.0};
+    sv.velocity = {0.0, 0.0, 0.0};
     // Calculate the real Julian date for the requested simulation time
     perturb::JulianDate realJD = m_simulationStartJD + at.GetSeconds() / 86400.0;
     // Calculate time difference in minutes from TLE epoch to real time

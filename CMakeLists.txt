@@ -9,6 +9,8 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(perturb)
 
+target_compile_options(perturb PRIVATE -Wno-unused-variable)
+
 
 build_lib(
   LIBNAME orbitshield
@@ -33,4 +35,5 @@ build_lib(
     test/test-constellation.cc
     test/test-isl.cc
     test/test-satellite.cc
+    test/test-orbitshield.cc
 )
