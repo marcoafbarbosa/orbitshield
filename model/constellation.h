@@ -50,6 +50,12 @@ class Constellation : public Object
     void LoadFromTleFile(const std::string& filename);
 
     /**
+     * \brief Load satellites from a TLE file
+     * \param file Input file stream
+     */
+    void LoadFromTleFile(std::istream& file);
+
+    /**
      * \brief Get the collection of satellites
      * \return Vector of satellite pointers
      */

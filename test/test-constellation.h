@@ -20,6 +20,9 @@ class ConstellationTestCase : public TestCase
 
   private:
     void DoRun() override;
+
+    void TestSimple();
+    void TestIridium();
 };
 
 #endif /* TEST_CONSTELLATION_H */

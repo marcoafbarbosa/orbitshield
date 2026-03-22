@@ -70,13 +70,26 @@ class Satellite : public Node
      * \brief Get the satellite's epoch time
      * \return the epoch time as a Time object
      */
-    Time GetTleEpochTime() const;
+    Time GetTleEpochAsNs3Time() const;
+
+    /**
+     * \brief Get the satellite's epoch time as a JulianDate
+     * \return the epoch time as a perturb::JulianDate
+     */
+    perturb::JulianDate GetTleEpochAsJulianDate() const;
 
     /**
      * \brief Get the satellite's classical orbital elements at the current simulation time
      * \return the orbital elements as a perturb::ClassicalOrbitalElements struct
      */
     perturb::ClassicalOrbitalElements GetOrbitalElements() const;
+
+
+    /**
+      * \brief Get the simulation start time in Julian date
+      * \return the simulation start time as a perturb::JulianDate
+      */
+    perturb::JulianDate GetSimulationStartJD() const;
 
   private:
     const std::string m_name;                     //!< Satellite name

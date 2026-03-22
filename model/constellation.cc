@@ -12,6 +12,7 @@
 #include "ns3/log.h"
 
 #include <fstream>
+#include <string>
 
 namespace ns3
 {
@@ -58,6 +59,14 @@ Constellation::LoadFromTleFile(const std::string& filename)
         return;
     }
 
+    LoadFromTleFile(file);
+
+    file.close();
+}
+
+void
+Constellation::LoadFromTleFile(std::istream& file)
+{
     std::vector<TleData> tleDataList;
     std::string line;
     std::string currentName;
@@ -96,28 +105,26 @@ Constellation::LoadFromTleFile(const std::string& filename)
         }
     }
 
-    file.close();
-
     if (tleDataList.empty())
     {
-        NS_LOG_WARN("No valid TLE data found in file: " << filename);
+        NS_LOG_WARN("No valid TLE data found in input");
         return;
     }
 
-    // Find the minimum epoch
-    perturb::JulianDate minEpoch(perturb::DateTime(2100, 1, 1, 0, 0, 0)); // Start with a far future date
+    // Find the maximum epoch
+    perturb::JulianDate maxEpoch(perturb::DateTime(1900, 1, 1, 0, 0, 0)); // Start with a very old date
     for (const auto& tleData : tleDataList)
     {
         std::string line1 = tleData.line1;
         std::string line2 = tleData.line2;
         perturb::Satellite tempSat = perturb::Satellite::from_tle(line1, line2);
         const perturb::JulianDate epoch = tempSat.epoch();
-        if (epoch < minEpoch)
+        if (epoch > maxEpoch)
         {
-            minEpoch = epoch;
+            maxEpoch = epoch;
         }
     }
-    m_simulationStartJD = minEpoch;
+    m_simulationStartJD = maxEpoch;
 
     // Second pass: create satellites
     for (auto& tleData : tleDataList)
@@ -128,7 +135,7 @@ Constellation::LoadFromTleFile(const std::string& filename)
         NS_LOG_INFO("Loaded satellite: " << tleData.name);
     }
 
-    NS_LOG_INFO("Loaded " << m_satellites.size() << " satellites from " << filename << " with simulation start at " << JulianDateToString(m_simulationStartJD));
+    NS_LOG_INFO("Loaded " << m_satellites.size() << " satellites with simulation start at " << JulianDateToString(m_simulationStartJD));
 }
 
 const std::vector<Ptr<Satellite>>&

@@ -72,7 +72,7 @@ SatelliteTestCase::TestWithConstellation()
 
     for(const auto& satellite : satellites)
     {
-        Time epochTime = satellite->GetTleEpochTime();
+        Time epochTime = satellite->GetTleEpochAsNs3Time();
         Vector pos0 = satellite->GetPosition(epochTime);
         Vector vel0 = satellite->GetVelocity(epochTime);
         // trivial position and velocity check

@@ -29,23 +29,21 @@ IslChannelTestCase::OnReceive(Ptr<NetDevice>, Ptr<const Packet>, uint16_t, const
 void
 IslChannelTestCase::DoRun()
 {
-    std::string name1 = "IRIDIUM 7";
-    std::string tle1_line1 = "1 24793U 97020B   26071.51251582  .00000492  00000-0  16199-3 0  9992";
-    std::string tle1_line2 = "2 24793  86.3908  64.4117 0001975  80.9987 279.1433 14.36187486510404";
+    std::stringstream ss;
+    ss << "0 IRIDIUM 7" << std::endl
+       << "1 24793U 97020B   26071.51251582  .00000492  00000-0  16199-3 0  9992" << std::endl
+       << "2 24793  86.3908  64.4117 0001975  80.9987 279.1433 14.36187486510404" << std::endl
+       << "0 IRIDIUM 5" << std::endl
+       << "1 24795U 97020D   26071.62611496  .00005035  00000-0  38599-3 0  9996" << std::endl
+       << "2 24795  86.3893 319.6474 0099647 252.3257 106.7076 14.97664148525594" << std::endl;
 
-    std::string name2 = "IRIDIUM 5";
-    std::string tle2_line1 = "1 24795U 97020D   26071.62611496  .00005035  00000-0  38599-3 0  9996";
-    std::string tle2_line2 = "2 24795  86.3893 319.6474 0099647 252.3257 106.7076 14.97664148525594";
 
-    // Get TLE epochs and find the minimum to use as simulation start
-    perturb::Satellite tempSat1 = perturb::Satellite::from_tle(tle1_line1, tle1_line2);
-    perturb::Satellite tempSat2 = perturb::Satellite::from_tle(tle2_line1, tle2_line2);
-    perturb::JulianDate epoch1 = tempSat1.epoch();
-    perturb::JulianDate epoch2 = tempSat2.epoch();
-    perturb::JulianDate simulationStartJD = (epoch1 > epoch2) ? epoch1 : epoch2;
-
-    Ptr<Satellite> sat1 = CreateObject<Satellite>(name1, tle1_line1, tle1_line2, simulationStartJD);
-    Ptr<Satellite> sat2 = CreateObject<Satellite>(name2, tle2_line1, tle2_line2, simulationStartJD);
+    Ptr<Constellation> constellation = CreateObject<Constellation>();
+    constellation->LoadFromTleFile(ss);
+    const std::vector<Ptr<Satellite>>& satellites = constellation->GetSatellites();
+    NS_TEST_ASSERT_MSG_EQ(satellites.size(), 2u, "Expected 2 satellites to be loaded");
+    Ptr<Satellite> sat1 = satellites[0];
+    Ptr<Satellite> sat2 = satellites[1];
 
     Ptr<SatelliteNetDevice> dev1 = CreateObject<SatelliteNetDevice>();
     Ptr<SatelliteNetDevice> dev2 = CreateObject<SatelliteNetDevice>();

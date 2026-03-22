@@ -11,6 +11,8 @@
 
 using namespace ns3;
 
+NS_LOG_COMPONENT_DEFINE("ConstellationTest");
+
 /**
  * \brief Test suite for Constellation class
  */
@@ -26,6 +28,13 @@ ConstellationTestCase::~ConstellationTestCase()
 
 void
 ConstellationTestCase::DoRun()
+{
+    TestSimple();
+    TestIridium();
+}
+
+void
+ConstellationTestCase::TestSimple()
 {
     const char* filename = "constellation-test.tle";
 
@@ -50,4 +59,34 @@ ConstellationTestCase::DoRun()
 
     // Clean up the temporary file
     std::remove(filename);
+}
+
+void
+ConstellationTestCase::TestIridium()
+{
+    // Create a constellation and load satellites from the TLE file
+    Ptr<Constellation> constellation = CreateObject<Constellation>();
+    constellation->LoadFromTleFile("contrib/orbitshield/data/iridium-20260312.txt");
+
+    const auto& satellites = constellation->GetSatellites();
+    NS_TEST_EXPECT_MSG_GT(satellites.size(), 0u, "Expected at least one satellite to be loaded");
+    
+    auto expectedStartJD = satellites[0]->GetSimulationStartJD();
+    for (const auto& sat : satellites)    {
+        // ensure all satellites have the same simulation start time
+        auto satStartJD = sat->GetSimulationStartJD();
+        bool equal = (satStartJD >= expectedStartJD) && (satStartJD <= expectedStartJD);
+        NS_TEST_EXPECT_MSG_EQ(equal, true, "All satellites should have the same simulation start time");
+
+        // ensure simulation start time is equal or greater than the TLE epoch time
+        auto tleEpochTime = sat->GetTleEpochAsJulianDate();
+        bool validEpoch = (satStartJD >= tleEpochTime);
+        NS_TEST_EXPECT_MSG_EQ(validEpoch, true, "Simulation start time should be equal or greater than TLE epoch time");
+
+        // ensure satellite positions can be queried without error
+        Vector3D pos = sat->GetPosition();
+        NS_LOG_INFO("Satellite " << sat->GetName() << " initial position: " << pos);
+    }
+
+
 }
