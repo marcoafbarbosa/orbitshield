@@ -278,7 +278,7 @@ Contributions to the OrbitShield module are welcome! When contributing:
 
 ## License
 
-OrbitShield is part of the ns-3 project and is distributed under the GNU General Public License (GPL) version 2. See the LICENSE file in the root ns-3 directory for details.
+OrbitShield is distributed under the GNU General Public License (GPL) version 2. See the LICENSE file for details.
 
 ## References
 
@@ -296,7 +296,7 @@ OrbitShield is part of the ns-3 project and is distributed under the GNU General
 
 ## Authors
 
-OrbitShield module developed as part of the ns-3 project.
+OrbitShield module developed by Marco A. F. Barbosa. AI tools have been used for development.
 
 ## Version
 
