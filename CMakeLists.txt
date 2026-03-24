@@ -37,3 +37,15 @@ build_lib(
     test/test-satellite.cc
     test/test-orbitshield.cc
 )
+
+build_exec(
+  EXECNAME orbitshield-isl-visualizer
+  SOURCE_FILES
+    tools/isl-visualizer.cc
+  LIBRARIES_TO_LINK ${liborbitshield}
+  EXECUTABLE_DIRECTORY_PATH
+        ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/orbitshield/
+  INSTALL_DIRECTORY_PATH ${CMAKE_INSTALL_LIBEXECDIR}/orbitshield
+  STANDALONE
+)
+

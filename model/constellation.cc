@@ -13,6 +13,10 @@
 
 #include <fstream>
 #include <string>
+#include <sstream>
+#include <set>
+#include <cmath>
+#include <iomanip>
 
 namespace ns3
 {
@@ -190,6 +194,101 @@ Constellation::CreateIslLinks(double maxRange)
     }
 
     return links;
+}
+
+std::string
+Constellation::ExportIslAsDot(const std::vector<Ptr<SatelliteLink>>& links, bool activeOnly) const
+{
+    NS_LOG_FUNCTION(this << "links.size=" << links.size() << "activeOnly=" << activeOnly);
+
+    std::ostringstream dot;
+
+    // Start graph
+    dot << "graph ISLTopology {\n";
+    dot << "  rankdir=LR;\n";
+    dot << "  splines=true;\n";
+    dot << "  sep=1.0;\n";
+    dot << "  overlap=scalexy;\n";
+    dot << "  node [shape=ellipse, style=filled, fillcolor=lightblue];\n";
+
+    // Collect unique satellites to create nodes
+    std::set<std::string> satelliteNames;
+    for (const auto& link : links)
+    {
+        if (activeOnly && !link->IsActive())
+            continue;
+
+        for (std::size_t i = 0; i < 2; ++i)
+        {
+            Ptr<NetDevice> device = link->GetDevice(i);
+            if (device)
+            {
+                Ptr<Node> node = device->GetNode();
+                if (node)
+                {
+                    Ptr<Satellite> satellite = DynamicCast<Satellite>(node);
+                    if (satellite)
+                    {
+                        satelliteNames.insert(satellite->GetName());
+                    }
+                }
+            }
+        }
+    }
+
+    // Add satellite nodes
+    for (const auto& satName : satelliteNames)
+    {
+        dot << "  \"" << satName << "\" [label=\"" << satName << "\"];\n";
+    }
+
+    // Add ISL edges with distance labels
+    for (const auto& link : links)
+    {
+        if (activeOnly && !link->IsActive())
+            continue;
+
+        Ptr<NetDevice> devA = link->GetDevice(0);
+        Ptr<NetDevice> devB = link->GetDevice(1);
+
+        if (!devA || !devB)
+            continue;
+
+        Ptr<Node> nodeA = devA->GetNode();
+        Ptr<Node> nodeB = devB->GetNode();
+
+        if (!nodeA || !nodeB)
+            continue;
+
+        Ptr<Satellite> satA = DynamicCast<Satellite>(nodeA);
+        Ptr<Satellite> satB = DynamicCast<Satellite>(nodeB);
+
+        if (!satA || !satB)
+            continue;
+
+        std::string nameA = satA->GetName();
+        std::string nameB = satB->GetName();
+
+        // Calculate distance
+        Vector3D posA = satA->GetPosition();
+        Vector3D posB = satB->GetPosition();
+        double distance = std::sqrt(std::pow(posA.x - posB.x, 2) +
+                                    std::pow(posA.y - posB.y, 2) +
+                                    std::pow(posA.z - posB.z, 2));
+        double distanceKm = distance / 1000.0;
+
+        // Format distance label
+        std::ostringstream distLabel;
+        distLabel << std::fixed << std::setprecision(1) << distanceKm << " km";
+
+        // Add edge
+        dot << "  \"" << nameA << "\" -- \"" << nameB << "\" [label=\"" << distLabel.str() << "\"];\n";
+    }
+
+    // Close graph
+    dot << "}\n";
+
+    return dot.str();
 }
 
 }  // namespace ns3

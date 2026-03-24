@@ -68,6 +68,14 @@ class Constellation : public Object
      */
     std::vector<Ptr<SatelliteLink>> CreateIslLinks(double maxRange);
 
+    /**
+     * \brief Export ISL topology as a Graphviz DOT format string.
+     * \param links Vector of satellite links to export.
+     * \param activeOnly If true, only export active links; otherwise export all links.
+     * \return A string containing the DOT graph representation.
+     */
+    std::string ExportIslAsDot(const std::vector<Ptr<SatelliteLink>>& links, bool activeOnly = true) const;
+
   private:
     std::vector<Ptr<Satellite>> m_satellites; //!< Collection of satellites in the constellation
     perturb::JulianDate m_simulationStartJD;  //!< Global simulation start time
