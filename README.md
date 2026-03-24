@@ -134,6 +134,33 @@ To run the constellation loading example:
 ./ns3 run orbitshield-load-from-tle
 ```
 
+## Tools
+
+The OrbitShield module includes a command-line visualization tool for inter-satellite links (ISLs).
+
+### ISL Visualizer
+
+- executable: `isl-visualizer`
+- location: `contrib/orbitshield/tools/isl-visualizer.cc`
+- purpose: Generates a Graphviz DOT topology of ISLs for a constellation loaded from a TLE file.
+
+Usage:
+
+```bash
+./ns3 run isl-visualizer -- contrib/orbitshield/data/iridium-20260312.txt 2000
+```
+
+This outputs DOT format to stdout, which you can redirect and render:
+
+```bash
+./ns3 run isl-visualizer -- contrib/orbitshield/data/iridium-20260312.txt 2000 > output.dot
+dot -Tpng output.dot -o output.png
+```
+
+**Notes**:
+- `max-range-kms` is specified in kilometers (e.g., `2000` for 2000 km).
+- `isl-visualizer` performs a file existence check and validates range input.
+
 **Note**: Examples are not built by default in ns-3. You must configure with `--enable-examples` to include them in the build.
 
 ## API Reference
