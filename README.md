@@ -8,10 +8,11 @@
 
 ### Current Implementation
 - **Models**
-  - **Satellite Node**: Basic satellite node representation with orbital propagation capabilities
-  - **Constellation**: Collection of satellites with TLE file loading support
+  - **Satellite Node**: Basic satellite node representation with orbital propagation capabilities and ground track position calculation
+  - **Constellation**: Collection of satellites with TLE file loading support and ISL topology visualization
 - **Test Suite**: Unit tests for core satellite and constellation functionality
 - **Example Applications**: Basic examples demonstrating module usage
+- **Tools**: ISL visualizer with geographic positioning
 
 ### Future Enhancements
 - Inter-satellite link (ISL) channel model
@@ -39,6 +40,8 @@ contrib/orbitshield/
 │   ├── orbitshield-basic-example.cc      # Basic satellite usage
 │   ├── orbitshield-load-from-tle.cc      # Constellation loading example
 │   └── CMakeLists.txt                    # Examples build configuration
+├── tools/
+│   └── isl-visualizer.cc        # ISL visualization tool
 ├── data/
 │   └── iridium-20260312.txt    # Sample TLE data
 ├── CMakeLists.txt               # Build configuration
@@ -142,7 +145,7 @@ The OrbitShield module includes a command-line visualization tool for inter-sate
 
 - executable: `isl-visualizer`
 - location: `contrib/orbitshield/tools/isl-visualizer.cc`
-- purpose: Generates a Graphviz DOT topology of ISLs for a constellation loaded from a TLE file.
+- purpose: Generates a Graphviz DOT topology of ISLs for a constellation loaded from a TLE file, with satellites positioned according to their ground track (latitude/longitude).
 
 Usage:
 
@@ -154,12 +157,15 @@ This outputs DOT format to stdout, which you can redirect and render:
 
 ```bash
 ./ns3 run isl-visualizer -- contrib/orbitshield/data/iridium-20260312.txt 2000 > output.dot
-dot -Tpng output.dot -o output.png
+neato -n -Tpng output.dot -o output.png
 ```
 
 **Notes**:
 - `max-range-kms` is specified in kilometers (e.g., `2000` for 2000 km).
 - `isl-visualizer` performs a file existence check and validates range input.
+- Satellite nodes are positioned based on their ground track coordinates (latitude/longitude) at the current simulation time.
+- Use `neato -n` to respect the explicit node positions in the DOT output for accurate geographic representation.
+- Node tooltips show latitude, longitude, and altitude information.
 
 **Note**: Examples are not built by default in ns-3. You must configure with `--enable-examples` to include them in the build.
 
@@ -181,6 +187,17 @@ public:
     // Satellite properties
     std::string GetName() const;
     Vector3D GetPosition();
+
+    // Ground track position
+    struct GroundTrackPosition
+    {
+        double latitude;  //!< in degrees [-90, +90]
+        double longitude; //!< in degrees [-180, +180)
+        double altitude;  //!< in meters above the ellipsoid
+    };
+
+    GroundTrackPosition GetGroundTrackPosition(Time at) const;
+    GroundTrackPosition GetGroundTrackPosition() const;
 };
 ```
 
@@ -206,8 +223,10 @@ Unit tests are included in `test/test-satellite.cc` and `test/test-constellation
 - Satellite object creation from TLE
 - Satellite name access
 - Position propagation via perturb
+- Ground track position calculation (latitude/longitude/altitude)
 - Constellation loading from TLE files
 - Satellite collection management
+- ISL topology export with geographic positioning
 
 Run the test suite:
 

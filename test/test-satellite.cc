@@ -58,6 +58,14 @@ SatelliteTestCase::TestSimple()
     NS_TEST_EXPECT_MSG_NE(pos0, pos10, "Position should change after 10 seconds");
     Vector vel = mobility->GetVelocity();
     NS_TEST_EXPECT_MSG_NE(vel, Vector(0.0, 0.0, 0.0), "Velocity should be non-zero in LEO");
+
+    auto gt = satellite->GetGroundTrackPosition();
+    NS_TEST_EXPECT_MSG_GT(gt.latitude, -90.0, "Latitude should be >= -90");
+    NS_TEST_EXPECT_MSG_LT(gt.latitude, 90.0, "Latitude should be <= 90");
+    NS_TEST_EXPECT_MSG_GT(gt.longitude, -180.0, "Longitude should be >= -180");
+    NS_TEST_EXPECT_MSG_LT(gt.longitude, 180.0, "Longitude should be < 180");
+
+    NS_LOG_INFO("Ground track lat/lon: " << gt.latitude << ", " << gt.longitude << " alt=" << gt.altitude);
 }
 
 void
@@ -126,5 +134,20 @@ SatelliteTestCase::TestWithConstellation()
         {
             NS_LOG_INFO("Satellite " << satellite->GetName() << " has eccentricity " << eccentricity << ", skipping half orbit position check");
         }
+
+        // Test ground track position
+        auto gt = satellite->GetGroundTrackPosition(epochTime);
+        NS_TEST_EXPECT_MSG_GT(gt.latitude, -90.0, "Ground track latitude should be > -90");
+        NS_TEST_EXPECT_MSG_LT(gt.latitude, 90.0, "Ground track latitude should be < 90");
+        NS_TEST_EXPECT_MSG_GT(gt.longitude, -180.0, "Ground track longitude should be > -180");
+        NS_TEST_EXPECT_MSG_LT(gt.longitude, 180.0, "Ground track longitude should be < 180");
+        NS_TEST_EXPECT_MSG_GT(gt.altitude, 0.0, "Ground track altitude should be positive");
+
+        NS_LOG_INFO("Satellite " << satellite->GetName() << " ground track: lat=" << gt.latitude
+                                 << " lon=" << gt.longitude << " alt=" << gt.altitude << "m");
     }
+
+    std::vector<Ptr<SatelliteLink>> links = constellation->CreateIslLinks(2000000.0);
+    std::string dot = constellation->ExportIslAsDot(links, true);
+    NS_TEST_EXPECT_MSG_NE(dot.find("pos="), std::string::npos, "DOT output should include node positions");
 }

@@ -15,6 +15,7 @@
 #include <string>
 #include <sstream>
 #include <set>
+#include <map>
 #include <cmath>
 #include <iomanip>
 
@@ -205,14 +206,15 @@ Constellation::ExportIslAsDot(const std::vector<Ptr<SatelliteLink>>& links, bool
 
     // Start graph
     dot << "graph ISLTopology {\n";
-    dot << "  rankdir=LR;\n";
+    dot << "  layout=neato;\n";
+    dot << "  outputorder=edgesfirst;\n";
     dot << "  splines=true;\n";
+    dot << "  overlap=false;\n";
     dot << "  sep=1.0;\n";
-    dot << "  overlap=scalexy;\n";
     dot << "  node [shape=ellipse, style=filled, fillcolor=lightblue];\n";
 
-    // Collect unique satellites to create nodes
-    std::set<std::string> satelliteNames;
+    // Collect unique satellites and compute ground track positions
+    std::map<std::string, Satellite::GroundTrackPosition> groundTrack;
     for (const auto& link : links)
     {
         if (activeOnly && !link->IsActive())
@@ -229,17 +231,30 @@ Constellation::ExportIslAsDot(const std::vector<Ptr<SatelliteLink>>& links, bool
                     Ptr<Satellite> satellite = DynamicCast<Satellite>(node);
                     if (satellite)
                     {
-                        satelliteNames.insert(satellite->GetName());
+                        const std::string& satName = satellite->GetName();
+                        if (groundTrack.find(satName) == groundTrack.end())
+                        {
+                            groundTrack[satName] = satellite->GetGroundTrackPosition();
+                        }
                     }
                 }
             }
         }
     }
 
-    // Add satellite nodes
-    for (const auto& satName : satelliteNames)
+    // Add satellite nodes with geographic positions for visualization
+    for (const auto& [satName, gt] : groundTrack)
     {
-        dot << "  \"" << satName << "\" [label=\"" << satName << "\"];\n";
+        // map lon/lat into 2D layout coordinates
+        double x = gt.longitude;
+        double y = gt.latitude;
+        constexpr double scale = 3.0;
+        x *= scale;
+        y *= scale;
+
+        dot << "  \"" << satName << "\" [label=\"" << satName << "\", pos=\""
+            << std::fixed << std::setprecision(2) << x << "," << y << "!\", tooltip=\"lat="
+            << gt.latitude << " lon=" << gt.longitude << " alt=" << gt.altitude << "m\"];\n";
     }
 
     // Add ISL edges with distance labels

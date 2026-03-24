@@ -6,6 +6,10 @@
 #include "orbitshield-utils.h"
 
 #include "ns3/log.h"
+#include "ns3/mobility-module.h"
+#include "ns3/angles.h"
+
+#include <cmath>
 
 namespace ns3
 {
@@ -132,6 +136,89 @@ perturb::JulianDate Satellite::GetSimulationStartJD() const
 {
     NS_LOG_FUNCTION(this);
     return m_simulationStartJD;
+}
+
+namespace
+{
+// Normalize angle to [0, 360)
+double
+NormalizeDegrees(double angle)
+{
+    double normalized = fmod(angle, 360.0);
+    if (normalized < 0.0)
+    {
+        normalized += 360.0;
+    }
+    return normalized;
+}
+
+// Compute Greenwich Mean Sidereal Time (degrees) from Julian date.
+// Source: https://aa.usno.navy.mil/faq/JD_formula
+// (approximation for UTC/UT1, good for visualization purposes)
+double
+JulianDateToGmstDegrees(const perturb::JulianDate &jd)
+{
+    // Julian date as decimal days
+    double julianDay = jd.jd + jd.jd_frac;
+
+    // Number of days since J2000.0
+    double d = julianDay - 2451545.0;
+    double d0 = floor(julianDay + 0.5) - 0.5 - 2451545.0; // at 0h UT
+    double t = d / 36525.0;
+
+    double gmstHours = 6.697374558 + 0.06570982441908 * d0 + 1.00273790935 * ((julianDay - floor(julianDay + 0.5) + 0.5) * 24.0) + 0.000026 * t * t;
+    double gmstDeg = NormalizeDegrees(gmstHours * 15.0);
+    return gmstDeg;
+}
+
+// Convert ECI (approx TEME) coordinates to ECEF via GMST rotation.
+Vector3D
+EciToEcef(const Vector3D &eci, const perturb::JulianDate &jd)
+{
+    double gmstDeg = JulianDateToGmstDegrees(jd);
+    double gmstRad = DegreesToRadians(gmstDeg);
+
+    double cosTheta = cos(gmstRad);
+    double sinTheta = sin(gmstRad);
+
+    double x = cosTheta * eci.x + sinTheta * eci.y;
+    double y = -sinTheta * eci.x + cosTheta * eci.y;
+    double z = eci.z;
+
+    return Vector3D(x, y, z);
+}
+
+} // anonymous namespace
+
+Satellite::GroundTrackPosition
+Satellite::GetGroundTrackPosition(Time at) const
+{
+    NS_LOG_FUNCTION(this << at);
+
+    Vector3D eciPosition = GetPosition(at); // meters
+
+    // Build Julian date for this moment in time
+    perturb::JulianDate currentJD = m_simulationStartJD + (at.GetSeconds() / 86400.0);
+
+    // Convert ECI -> ECEF
+    Vector3D ecefPosition = EciToEcef(eciPosition, currentJD);
+
+    // Convert to geodetic coordinates in WGS84
+    Vector geo = GeographicPositions::CartesianToGeographicCoordinates(Vector(ecefPosition.x, ecefPosition.y, ecefPosition.z), GeographicPositions::WGS84);
+
+    GroundTrackPosition result;
+    result.latitude = geo.x;
+    result.longitude = geo.y;
+    result.altitude = geo.z;
+
+    return result;
+}
+
+Satellite::GroundTrackPosition
+Satellite::GetGroundTrackPosition() const
+{
+    NS_LOG_FUNCTION(this);
+    return GetGroundTrackPosition(Simulator::Now());
 }
 
 }  // namespace ns3

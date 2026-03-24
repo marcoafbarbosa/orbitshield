@@ -84,12 +84,32 @@ class Satellite : public Node
      */
     perturb::ClassicalOrbitalElements GetOrbitalElements() const;
 
+    /**
+     * \brief Ground track position in geographic coordinates
+     */
+    struct GroundTrackPosition
+    {
+        double latitude;  //!< in degrees [-90, +90]
+        double longitude; //!< in degrees [-180, +180)
+        double altitude;  //!< in meters above the ellipsoid
+    };
 
     /**
-      * \brief Get the simulation start time in Julian date
-      * \return the simulation start time as a perturb::JulianDate
-      */
+     * \brief Get the simulation start time in Julian date
+     * \return the simulation start time as a perturb::JulianDate
+     */
     perturb::JulianDate GetSimulationStartJD() const;
+
+    /**
+     * \brief Get satellite ground track lat/lon/alt for simulation time.
+     * \param at simulation time
+     */
+    GroundTrackPosition GetGroundTrackPosition(Time at) const;
+
+    /**
+     * \brief Get satellite ground track lat/lon/alt for current simulator time.
+     */
+    GroundTrackPosition GetGroundTrackPosition() const;
 
   private:
     const std::string m_name;                     //!< Satellite name
