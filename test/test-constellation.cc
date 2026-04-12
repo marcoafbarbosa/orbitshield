@@ -57,7 +57,33 @@ ConstellationTestCase::TestSimple()
     NS_TEST_EXPECT_MSG_EQ(sats[0]->GetName(), std::string("SAT-1"), "First satellite name should match");
     NS_TEST_EXPECT_MSG_EQ(sats[1]->GetName(), std::string("SAT-2"), "Second satellite name should match");
 
-    // Clean up the temporary file
+    const char* ringFilename = "constellation-test.rings";
+    {
+        std::ofstream ringFile(ringFilename);
+        ringFile << "constellationName=TestConstellation\n";
+        ringFile << "ringCount=2\n";
+        ringFile << "ring.0=SAT-1\n";
+        ringFile << "ring.1=SAT-2\n";
+    }
+
+    constellation->LoadFromRingFile(ringFilename);
+    NS_TEST_EXPECT_MSG_EQ(constellation->GetRingCount(), 2u, "Ring count should be 2");
+
+    const auto& ring0 = constellation->GetSatellitesInRing(0);
+    const auto& ring1 = constellation->GetSatellitesInRing(1);
+    NS_TEST_EXPECT_MSG_EQ(ring0.size(), 1u, "Ring 0 should contain 1 satellite");
+    NS_TEST_EXPECT_MSG_EQ(ring1.size(), 1u, "Ring 1 should contain 1 satellite");
+    NS_TEST_EXPECT_MSG_EQ(ring0[0]->GetName(), std::string("SAT-1"), "Ring 0 should have SAT-1");
+    NS_TEST_EXPECT_MSG_EQ(ring1[0]->GetName(), std::string("SAT-2"), "Ring 1 should have SAT-2");
+
+    const auto& next0 = constellation->GetNextRingSatellites(0);
+    const auto& prev0 = constellation->GetPreviousRingSatellites(0);
+    NS_TEST_EXPECT_MSG_EQ(next0.size(), 1u, "Next ring from 0 should have 1 satellite");
+    NS_TEST_EXPECT_MSG_EQ(prev0.size(), 1u, "Previous ring from 0 should have 1 satellite");
+    NS_TEST_EXPECT_MSG_EQ(next0[0]->GetName(), std::string("SAT-2"), "Next ring from 0 should be SAT-2");
+    NS_TEST_EXPECT_MSG_EQ(prev0[0]->GetName(), std::string("SAT-2"), "Previous ring from 0 should be SAT-2 (wrap-around)");
+
+    std::remove(ringFilename);
     std::remove(filename);
 }
 

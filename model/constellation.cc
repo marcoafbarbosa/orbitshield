@@ -16,8 +16,10 @@
 #include <sstream>
 #include <set>
 #include <map>
+#include <unordered_map>
 #include <cmath>
 #include <iomanip>
+#include <algorithm>
 
 namespace ns3
 {
@@ -148,6 +150,227 @@ Constellation::GetSatellites() const
 {
     NS_LOG_FUNCTION(this);
     return m_satellites;
+}
+
+namespace
+{
+static inline void TrimString(std::string& s)
+{
+    auto notSpace = [](int ch) { return !std::isspace(ch); };
+    s.erase(s.begin(), std::find_if(s.begin(), s.end(), notSpace));
+    s.erase(std::find_if(s.rbegin(), s.rend(), notSpace).base(), s.end());
+}
+
+static std::vector<std::string>
+SplitAndTrim(const std::string& s, char delim)
+{
+    std::vector<std::string> tokens;
+    std::istringstream stream(s);
+    std::string item;
+    while (std::getline(stream, item, delim))
+    {
+        TrimString(item);
+        if (!item.empty())
+        {
+            tokens.push_back(item);
+        }
+    }
+    return tokens;
+}
+} // anonymous namespace
+
+static const std::vector<Ptr<Satellite>>&
+EmptySatelliteVector()
+{
+    static const std::vector<Ptr<Satellite>> empty;
+    return empty;
+}
+
+void
+Constellation::LoadFromRingFile(const std::string& filename)
+{
+    NS_LOG_FUNCTION(this << filename);
+
+    // Extract directory from filename for resolving relative TLE paths
+    std::string basePath;
+    size_t lastSlash = filename.find_last_of("/\\");
+    if (lastSlash != std::string::npos)
+    {
+        basePath = filename.substr(0, lastSlash + 1);
+    }
+
+    std::ifstream file(filename);
+    if (!file.is_open())
+    {
+        NS_LOG_ERROR("Could not open ring file: " << filename);
+        return;
+    }
+    LoadFromRingFile(file, basePath);
+
+    file.close();
+}
+
+void
+Constellation::LoadFromRingFile(std::istream& file, const std::string& basePath)
+{
+    NS_LOG_FUNCTION(this);
+
+    m_rings.clear();
+    m_satelliteRingMap.clear();
+    m_ringCount = 0;
+    m_constellationName.clear();
+    m_tleFile.clear();
+
+    std::string line;
+    std::map<uint32_t, std::vector<std::string>> ringNames;
+
+    while (std::getline(file, line))
+    {
+        TrimString(line);
+        if (line.empty() || line[0] == '#')
+            continue;
+
+        auto pos = line.find('=');
+        if (pos == std::string::npos)
+            continue;
+
+        std::string key = line.substr(0, pos);
+        std::string value = line.substr(pos + 1);
+        TrimString(key);
+        TrimString(value);
+
+        if (key == "constellationName")
+        {
+            m_constellationName = value;
+        }
+        else if (key == "tleFile")
+        {
+            m_tleFile = value;
+        }
+        else if (key == "ringCount")
+        {
+            try
+            {
+                m_ringCount = static_cast<uint32_t>(std::stoul(value));
+            }
+            catch (...) {
+                NS_LOG_WARN("Invalid ringCount value in ring file: " << value);
+                m_ringCount = 0;
+            }
+        }
+        else if (key.rfind("ring.", 0) == 0)
+        {
+            uint32_t ringId = 0;
+            try
+            {
+                std::string idString = key.substr(5);
+                ringId = static_cast<uint32_t>(std::stoul(idString));
+            }
+            catch (...) {
+                NS_LOG_WARN("Invalid ring identifier in ring file: " << key);
+                continue;
+            }
+            std::vector<std::string> names = SplitAndTrim(value, ',');
+            for (const auto &satName : names)
+            {
+                if (ringNames[ringId].end() != std::find(ringNames[ringId].begin(), ringNames[ringId].end(), satName))
+                {
+                    continue;
+                }
+                ringNames[ringId].push_back(satName);
+            }
+        }
+        else
+        {
+            NS_LOG_WARN("Unknown ring file key: " << key);
+        }
+    }
+
+    // Load TLE data if specified
+    if (!m_tleFile.empty())
+    {
+        std::string tlePath = basePath + m_tleFile;
+        NS_LOG_INFO("Loading TLE data from: " << tlePath);
+        m_satellites.clear(); // Clear existing satellites before loading new ones
+        LoadFromTleFile(tlePath);
+    }
+
+    // Map TLE satellites into rings using existing m_satellites
+    std::unordered_map<std::string, Ptr<Satellite>> nameToSat;
+    for (const auto& sat : m_satellites)
+    {
+        nameToSat[sat->GetName()] = sat;
+    }
+
+    std::map<uint32_t, std::vector<Ptr<Satellite>>> realRings;
+
+    for (const auto& [ringId, names] : ringNames)
+    {
+        for (const auto& name : names)
+        {
+            auto it = nameToSat.find(name);
+            if (it != nameToSat.end())
+            {
+                realRings[ringId].push_back(it->second);
+                m_satelliteRingMap[name] = ringId;
+            }
+            else
+            {
+                NS_LOG_WARN("Ring file references unknown satellite " << name);
+            }
+        }
+    }
+
+    m_rings = std::move(realRings);
+
+    if (m_ringCount == 0)
+    {
+        m_ringCount = static_cast<uint32_t>(m_rings.size());
+    }
+}
+
+uint32_t
+Constellation::GetRingCount() const
+{
+    return m_ringCount;
+}
+
+std::optional<uint32_t>
+Constellation::GetRingOfSatellite(const std::string& satName) const
+{
+    auto it = m_satelliteRingMap.find(satName);
+    if (it == m_satelliteRingMap.end())
+    {
+        return std::nullopt;
+    }
+    return it->second;
+}
+
+const std::vector<Ptr<Satellite>>&
+Constellation::GetSatellitesInRing(uint32_t ringId) const
+{
+    auto it = m_rings.find(ringId);
+    return it == m_rings.end() ? EmptySatelliteVector() : it->second;
+}
+
+const std::vector<Ptr<Satellite>>&
+Constellation::GetPreviousRingSatellites(uint32_t ringId) const
+{
+    if (m_ringCount == 0)
+        return EmptySatelliteVector();
+
+    uint32_t prev = (ringId + m_ringCount - 1) % m_ringCount;
+    return GetSatellitesInRing(prev);
+}
+
+const std::vector<Ptr<Satellite>>&
+Constellation::GetNextRingSatellites(uint32_t ringId) const
+{
+    if (m_ringCount == 0)
+        return EmptySatelliteVector();
+
+    uint32_t next = (ringId + 1) % m_ringCount;
+    return GetSatellitesInRing(next);
 }
 
 std::vector<Ptr<SatelliteLink>>

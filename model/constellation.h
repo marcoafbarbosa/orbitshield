@@ -11,6 +11,10 @@
 
 #include <perturb/perturb.hpp>
 
+#include <map>
+#include <optional>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace ns3
@@ -76,9 +80,25 @@ class Constellation : public Object
      */
     std::string ExportIslAsDot(const std::vector<Ptr<SatelliteLink>>& links, bool activeOnly = true) const;
 
+    // Ring metadata (optional) for constellation structure
+    void LoadFromRingFile(const std::string& filename);
+    void LoadFromRingFile(std::istream& file, const std::string& basePath = "");
+
+    uint32_t GetRingCount() const;
+    std::optional<uint32_t> GetRingOfSatellite(const std::string& satName) const;
+    const std::vector<Ptr<Satellite>>& GetSatellitesInRing(uint32_t ringId) const;
+    const std::vector<Ptr<Satellite>>& GetPreviousRingSatellites(uint32_t ringId) const;
+    const std::vector<Ptr<Satellite>>& GetNextRingSatellites(uint32_t ringId) const;
+
   private:
     std::vector<Ptr<Satellite>> m_satellites; //!< Collection of satellites in the constellation
     perturb::JulianDate m_simulationStartJD;  //!< Global simulation start time
+
+    uint32_t m_ringCount = 0;
+    std::map<uint32_t, std::vector<Ptr<Satellite>>> m_rings; //!< ring-id -> satellites
+    std::unordered_map<std::string, uint32_t> m_satelliteRingMap; //!< satellite name -> ring-id
+    std::string m_constellationName;
+    std::string m_tleFile; //!< Path to TLE file referenced in ring file
 };
 
 }  // namespace ns3
