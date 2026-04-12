@@ -89,12 +89,12 @@ SatelliteTestCase::TestWithConstellation()
 
         // Check that altitude is within expected range for LEO satellites (between 160 km and 2000 km)
         double altitude0 = pos0.GetLength() - 6371000.0; // Earth radius
-        NS_LOG_INFO("Satellite " << satellite->GetName() << " altitude at epoch: " << altitude0 << " meters");
+        // NS_LOG_INFO("Satellite " << satellite->GetName() << " altitude at epoch: " << altitude0 << " meters");
         NS_TEST_EXPECT_MSG_GT(altitude0, 200000.0, "Satellite altitude should be above 200 km");
         NS_TEST_EXPECT_MSG_LT(altitude0, 800000.0, "Satellite altitude should be below 800 km");
 
         double speed = vel0.GetLength();
-        NS_LOG_INFO("Satellite " << satellite->GetName() << " speed at epoch: " << speed << " m/s");
+        // NS_LOG_INFO("Satellite " << satellite->GetName() << " speed at epoch: " << speed << " m/s");
         NS_TEST_EXPECT_MSG_GT(speed, 7000.0, "Satellite speed should be above 7000 m/s");
         NS_TEST_EXPECT_MSG_LT(speed, 8000.0, "Satellite speed should be below 8000 m/s");
 
@@ -104,35 +104,35 @@ SatelliteTestCase::TestWithConstellation()
 
         // compute expected position change based on velocity and time
         Vector expectedPos1 = pos0 + vel0 * 1.0; // simple linear approximation
-        NS_LOG_INFO("Satellite " << satellite->GetName() << " expected position after 1 second (linear approximation): " << expectedPos1);
+        // NS_LOG_INFO("Satellite " << satellite->GetName() << " expected position after 1 second (linear approximation): " << expectedPos1);
         double expectedDelta = CalculateDistance(pos1, expectedPos1);
-        NS_LOG_INFO("Satellite " << satellite->GetName() << " distance between actual and expected position after 1 second: " << expectedDelta << " meters");
+        // NS_LOG_INFO("Satellite " << satellite->GetName() << " distance between actual and expected position after 1 second: " << expectedDelta << " meters");
 
         NS_TEST_EXPECT_MSG_EQ_TOL(expectedDelta, 0.0, 10.0, "Satellite position after 1 second should be approximately equal to linear approximation based on velocity");
 
         // distance traveled should be approximately equal to speed * time
         double distanceTraveled = CalculateDistance(pos0, pos1);
-        NS_LOG_INFO("Satellite " << satellite->GetName() << " distance traveled after 1 second: " << distanceTraveled << " meters");
+        // NS_LOG_INFO("Satellite " << satellite->GetName() << " distance traveled after 1 second: " << distanceTraveled << " meters");
         NS_TEST_EXPECT_MSG_EQ_TOL(distanceTraveled, speed * 1.0, 10.0, "Distance traveled after 1 second should be approximately equal to speed * time");
 
         double eccentricity = satellite->GetOrbitalElements().eccentricity;
-        NS_LOG_INFO("Satellite " << satellite->GetName() << " eccentricity: " << eccentricity);
+        // NS_LOG_INFO("Satellite " << satellite->GetName() << " eccentricity: " << eccentricity);
 
         if(eccentricity < 0.0015)
         {
             // after half an orbit period, the satellite should be on the opposite side of the Earth
             double orbitalPeriod = 2.0 * M_PI * (altitude0 + 6371000.0) / speed; // T = 2 * pi * r / v
-            NS_LOG_INFO("Satellite " << satellite->GetName() << " orbital period: " << orbitalPeriod << " seconds");
+            // NS_LOG_INFO("Satellite " << satellite->GetName() << " orbital period: " << orbitalPeriod << " seconds");
             Time tHalfOrbit = epochTime + Seconds(orbitalPeriod / 2.0);
             Vector posHalfOrbit = satellite->GetPosition(tHalfOrbit);
             Vector expectedPosHalfOrbit = {-pos0.x, -pos0.y, -pos0.z}; // opposite position
             double distanceHalfOrbit = CalculateDistance(posHalfOrbit, expectedPosHalfOrbit);
-            NS_LOG_INFO("Satellite " << satellite->GetName() << " distance after half an orbit: " << distanceHalfOrbit << " meters");
+            // NS_LOG_INFO("Satellite " << satellite->GetName() << " distance after half an orbit: " << distanceHalfOrbit << " meters");
             NS_TEST_EXPECT_MSG_EQ_TOL(distanceHalfOrbit, 0, 100000.0, "Satellite position after half an orbit should be approximately opposite");
         }
         else
         {
-            NS_LOG_INFO("Satellite " << satellite->GetName() << " has eccentricity " << eccentricity << ", skipping half orbit position check");
+            // NS_LOG_INFO("Satellite " << satellite->GetName() << " has eccentricity " << eccentricity << ", skipping half orbit position check");
         }
 
         // Test ground track position
@@ -143,8 +143,8 @@ SatelliteTestCase::TestWithConstellation()
         NS_TEST_EXPECT_MSG_LT(gt.longitude, 180.0, "Ground track longitude should be < 180");
         NS_TEST_EXPECT_MSG_GT(gt.altitude, 0.0, "Ground track altitude should be positive");
 
-        NS_LOG_INFO("Satellite " << satellite->GetName() << " ground track: lat=" << gt.latitude
-                                 << " lon=" << gt.longitude << " alt=" << gt.altitude << "m");
+        // NS_LOG_INFO("Satellite " << satellite->GetName() << " ground track: lat=" << gt.latitude
+        //                          << " lon=" << gt.longitude << " alt=" << gt.altitude << "m");
     }
 
     std::vector<Ptr<SatelliteLink>> links = constellation->CreateIslLinks(2000000.0);
