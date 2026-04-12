@@ -22,6 +22,7 @@ class ConstellationTestCase : public TestCase
     void DoRun() override;
 
     void TestSimple();
+    void TestIslFallbackWithoutRings();
     void TestIridium();
 };
 

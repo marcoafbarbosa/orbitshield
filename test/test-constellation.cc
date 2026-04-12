@@ -30,6 +30,7 @@ void
 ConstellationTestCase::DoRun()
 {
     TestSimple();
+    TestIslFallbackWithoutRings();
     TestIridium();
 }
 
@@ -84,6 +85,36 @@ ConstellationTestCase::TestSimple()
     NS_TEST_EXPECT_MSG_EQ(prev0[0]->GetName(), std::string("SAT-2"), "Previous ring from 0 should be SAT-2 (wrap-around)");
 
     std::remove(ringFilename);
+    std::remove(filename);
+}
+
+void
+ConstellationTestCase::TestIslFallbackWithoutRings()
+{
+    const char* filename = "constellation-fallback-test.tle";
+
+    {
+        std::ofstream file(filename);
+        file << "0 SAT-A\n";
+        file << "1 25544U 98067A   22071.78032407  .00021395  00000-0  39008-3 0  9996\n";
+        file << "2 25544  51.6424  94.0370 0004047 256.5103  89.8846 15.49386383330227\n";
+        file << "0 SAT-B\n";
+        file << "1 25544U 98067A   22071.78032407  .00021395  00000-0  39008-3 0  9996\n";
+        file << "2 25544  51.6424  94.0370 0004047 256.5103  89.8846 15.49386383330227\n";
+    }
+
+    Ptr<Constellation> constellation = CreateObject<Constellation>();
+    constellation->LoadFromTleFile(filename);
+
+    const auto& sats = constellation->GetSatellites();
+    NS_TEST_EXPECT_MSG_EQ(sats.size(), 2u, "Expected 2 satellites loaded for fallback test");
+
+    std::vector<Ptr<SatelliteLink>> links = constellation->CreateIslLinks(2000000.0);
+    NS_TEST_EXPECT_MSG_GT(links.size(), 0u, "Expected at least one ISL link to be created without ring data");
+
+    std::string dot = constellation->ExportIslAsDot(links, true);
+    NS_TEST_EXPECT_MSG_NE(dot.find("pos="), std::string::npos, "DOT output should include node positions for fallback ISL links");
+
     std::remove(filename);
 }
 
