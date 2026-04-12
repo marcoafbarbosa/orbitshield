@@ -167,6 +167,47 @@ neato -n -Tpng output.dot -o output.png
 - Use `neato -n` to respect the explicit node positions in the DOT output for accurate geographic representation.
 - Node tooltips show latitude, longitude, and altitude information.
 
+### Constellation ring metadata
+
+OrbitShield now supports a constellation metadata file that describes ring structure and per-ring satellite assignment.
+
+Supported metadata format (simple key-value text):
+
+```text
+constellationName=iridium-2026
+tleFile=iridium-20260312.txt
+ringCount=2
+ring.0=IRIDIUM 7,IRIDIUM 5,IRIDIUM 4
+ring.1=IRIDIUM 914,IRIDIUM 16,IRIDIUM 911
+```
+
+The `tleFile` field is optional and specifies the relative path to the TLE file containing satellite orbital data. If provided, the TLE data will be loaded automatically when loading the ring file.
+
+Load ring metadata (with automatic TLE loading):
+
+```cpp
+Ptr<Constellation> constellation = CreateObject<Constellation>();
+constellation->LoadFromRingFile("contrib/orbitshield/data/iridium-20260312.rings");
+// TLE data is loaded automatically from the tleFile field
+```
+
+Or load TLE and ring metadata separately (legacy method):
+
+```cpp
+Ptr<Constellation> constellation = CreateObject<Constellation>();
+constellation->LoadFromTleFile("contrib/orbitshield/data/iridium-20260312.txt");
+constellation->LoadFromRingFile("contrib/orbitshield/data/iridium-20260312.rings");
+```
+
+Access ring-specific satellites:
+
+```cpp
+auto ring0 = constellation->GetSatellitesInRing(0);
+auto nextRing = constellation->GetNextRingSatellites(0);
+auto prevRing = constellation->GetPreviousRingSatellites(0);
+auto ringId = constellation->GetRingOfSatellite("IRIDIUM 7");
+```
+
 **Note**: Examples are not built by default in ns-3. You must configure with `--enable-examples` to include them in the build.
 
 ## API Reference
