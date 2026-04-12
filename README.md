@@ -143,29 +143,30 @@ The OrbitShield module includes a command-line visualization tool for inter-sate
 
 ### ISL Visualizer
 
-- executable: `isl-visualizer`
+- executable: `orbitshield-isl-visualizer`
 - location: `contrib/orbitshield/tools/isl-visualizer.cc`
-- purpose: Generates a Graphviz DOT topology of ISLs for a constellation loaded from a TLE file, with satellites positioned according to their ground track (latitude/longitude).
+- purpose: Generates a Graphviz DOT topology of ISLs for a constellation loaded from a ring metadata file, with satellites positioned according to their ground track (latitude/longitude).
 
 Usage:
 
 ```bash
-./ns3 run isl-visualizer -- contrib/orbitshield/data/iridium-20260312.txt 2000
+./ns3 run orbitshield-isl-visualizer -- contrib/orbitshield/data/iridium-20260312.rings 50000000
 ```
 
 This outputs DOT format to stdout, which you can redirect and render:
 
 ```bash
-./ns3 run isl-visualizer -- contrib/orbitshield/data/iridium-20260312.txt 2000 > output.dot
+./ns3 run isl-visualizer -- contrib/orbitshield/data/iridium-20260312.rings 2000000 > output.dot
 neato -n -Tpng output.dot -o output.png
 ```
 
 **Notes**:
-- `max-range-kms` is specified in kilometers (e.g., `2000` for 2000 km).
+- `max-range-meters` is specified in meters (e.g., `2000000` for 2000 km).
 - `isl-visualizer` performs a file existence check and validates range input.
 - Satellite nodes are positioned based on their ground track coordinates (latitude/longitude) at the current simulation time.
 - Use `neato -n` to respect the explicit node positions in the DOT output for accurate geographic representation.
 - Node tooltips show latitude, longitude, and altitude information.
+- When using ring metadata files, satellites are automatically colored by ring membership for easy visualization.
 
 ### Constellation ring metadata
 

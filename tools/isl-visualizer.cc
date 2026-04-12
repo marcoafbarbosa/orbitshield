@@ -22,10 +22,10 @@
  * Tool to visualize Inter-Satellite Links (ISLs) in a constellation.
  * Generates a Graphviz DOT format representation of the ISL topology.
  *
- * Usage: isl-visualizer <tle-file> <max-range-kms>
+ * Usage: isl-visualizer <ring-file> <max-range-meters>
  *
  * Example:
- *   isl-visualizer contrib/orbitshield/data/iridium-20260312.txt 2000000
+ *   isl-visualizer contrib/orbitshield/data/iridium-20260312.rings 2000000
  */
 
 #include "ns3/core-module.h"
@@ -45,11 +45,11 @@ using namespace ns3;
 void
 PrintUsage(const char* programName)
 {
-    std::cerr << "Usage: " << programName << " <tle-file> <max-range-kms>\n" 
+    std::cerr << "Usage: " << programName << " <ring-file> <max-range-meters>\n" 
               << "\n"
               << "Arguments:\n"
-              << "  <tle-file>           Path to TLE file (e.g., contrib/orbitshield/data/iridium-20260312.txt)\n"
-              << "  <max-range-kms>   Maximum ISL range in meters (e.g., 2000000 for 2000 km)\n"
+              << "  <ring-file>          Path to constellation ring file (e.g., contrib/orbitshield/data/iridium-20260312.rings)\n"
+              << "  <max-range-meters>   Maximum ISL range in meters (e.g., 2000000 for 2000 km)\n"
               << "\n"
               << "Output:\n"
               << "  Outputs Graphviz DOT format representation to stdout.\n"
@@ -70,16 +70,16 @@ main(int argc, char* argv[])
         return 1;
     }
 
-    std::string tleFile = argv[1];
+    std::string ringFile = argv[1];
     double maxRange = 0.0;
 
     // Parse max range
     try
     {
-        maxRange = std::stod(argv[2]) * 1000.0; // Convert km to meters
+        maxRange = std::stod(argv[2]);
         if (maxRange <= 0)
         {
-            std::cerr << "Error: max-range-kms must be positive\n";
+            std::cerr << "Error: max-range-meters must be positive\n";
             return 1;
         }
     }
@@ -89,20 +89,20 @@ main(int argc, char* argv[])
         return 1;
     }
 
-    // Check if TLE file exists
-    std::ifstream fileCheck(tleFile);
+    // Check if ring file exists
+    std::ifstream fileCheck(ringFile);
     if (!fileCheck.good())
     {
-        std::cerr << "Error: cannot open TLE file: " << tleFile << "\n";
+        std::cerr << "Error: cannot open ring file: " << ringFile << "\n";
         return 1;
     }
     fileCheck.close();
 
     try
     {
-        // Create constellation and load satellites
+        // Create constellation and load satellites from ring metadata
         Ptr<Constellation> constellation = CreateObject<Constellation>();
-        constellation->LoadFromTleFile(tleFile);
+        constellation->LoadFromRingFile(ringFile);
 
         const auto& satellites = constellation->GetSatellites();
         

@@ -17,6 +17,7 @@
 #include <set>
 #include <map>
 #include <unordered_map>
+#include <limits>
 #include <cmath>
 #include <iomanip>
 #include <algorithm>
@@ -380,43 +381,153 @@ Constellation::CreateIslLinks(double maxRange)
 
     std::vector<Ptr<SatelliteLink>> links;
 
-    for (std::size_t i = 0; i < m_satellites.size(); ++i)
+    // Build potential connection candidates for each satellite
+    std::unordered_map<Ptr<Satellite>, std::vector<Ptr<Satellite>>> potentialConnections;
+
+    if (m_rings.empty())
     {
-        for (std::size_t j = i + 1; j < m_satellites.size(); ++j)
+        NS_LOG_WARN("No ring structure available for ISL topology creation; falling back to nearest-neighbor topology");
+
+        for (const auto& sat : m_satellites)
         {
-            Ptr<Satellite> satA = m_satellites[i];
-            Ptr<Satellite> satB = m_satellites[j];
-
-            Ptr<SatelliteNetDevice> devA = CreateObject<SatelliteNetDevice>();
-            Ptr<SatelliteNetDevice> devB = CreateObject<SatelliteNetDevice>();
-
-            devA->SetNode(satA);
-            devB->SetNode(satB);
-
-            if (!satA->GetObject<SatelliteMobilityModel>())
+            std::vector<std::pair<double, Ptr<Satellite>>> distances;
+            for (const auto& other : m_satellites)
             {
-                Ptr<SatelliteMobilityModel> mobility = CreateObject<SatelliteMobilityModel>();
-                mobility->SetSatellite(satA);
-                satA->AggregateObject(mobility);
-            }
-            if (!satB->GetObject<SatelliteMobilityModel>())
-            {
-                Ptr<SatelliteMobilityModel> mobility = CreateObject<SatelliteMobilityModel>();
-                mobility->SetSatellite(satB);
-                satB->AggregateObject(mobility);
+                if (sat == other)
+                {
+                    continue;
+                }
+                distances.emplace_back(CalculateSatelliteDistance(sat, other), other);
             }
 
-            satA->AddDevice(devA);
-            satB->AddDevice(devB);
+            std::sort(distances.begin(), distances.end(), [](const auto& a, const auto& b) {
+                return a.first < b.first;
+            });
 
-            Ptr<SatelliteLink> link = CreateObject<SatelliteLink>(devA, devB);
-            link->SetMaxRange(maxRange);
-            link->SetPropagationDelayModel(CreateObject<IslPropagationDelayModel>());
+            for (std::size_t k = 0; k < std::min<std::size_t>(2, distances.size()); ++k)
+            {
+                potentialConnections[sat].push_back(distances[k].second);
+            }
+        }
+    }
+    else
+    {
+        for (const auto& [ringId, ringSats] : m_rings)
+    {
+        if (ringSats.empty())
+            continue;
 
-            links.push_back(link);
+        // Intra-ring connections: each satellite connects to the two closest satellites
+        for (std::size_t i = 0; i < ringSats.size(); ++i)
+        {
+            Ptr<Satellite> sat = ringSats[i];
+            std::vector<std::pair<double, Ptr<Satellite>>> distances;
+
+            // Calculate distances to all other satellites in the same ring
+            for (std::size_t j = 0; j < ringSats.size(); ++j)
+            {
+                if (i == j)
+                    continue;
+
+                Ptr<Satellite> otherSat = ringSats[j];
+                double distance = CalculateSatelliteDistance(sat, otherSat);
+                distances.emplace_back(distance, otherSat);
+            }
+
+            // Sort by distance and take the two closest
+            std::sort(distances.begin(), distances.end());
+            for (std::size_t k = 0; k < std::min(std::size_t(2), distances.size()); ++k)
+            {
+                potentialConnections[sat].push_back(distances[k].second);
+            }
+        }
+
+        // Inter-ring connections: each satellite connects to closest in adjacent rings
+        std::vector<Ptr<Satellite>> prevRing = GetPreviousRingSatellites(ringId);
+        std::vector<Ptr<Satellite>> nextRing = GetNextRingSatellites(ringId);
+
+        for (Ptr<Satellite> sat : ringSats)
+        {
+            // Find closest satellite in previous ring
+            if (!prevRing.empty())
+            {
+                Ptr<Satellite> closestPrev = FindClosestSatellite(sat, prevRing);
+                if (closestPrev)
+                {
+                    potentialConnections[sat].push_back(closestPrev);
+                }
+            }
+
+            // Find closest satellite in next ring
+            if (!nextRing.empty())
+            {
+                Ptr<Satellite> closestNext = FindClosestSatellite(sat, nextRing);
+                if (closestNext)
+                {
+                    potentialConnections[sat].push_back(closestNext);
+                }
+            }
+        }
+    }
+    }
+
+    // Remove duplicate candidate entries for each satellite.
+    for (auto& [sat, candidates] : potentialConnections)
+    {
+        std::sort(candidates.begin(), candidates.end(), [](const Ptr<Satellite>& a, const Ptr<Satellite>& b) {
+            return a->GetName() < b->GetName();
+        });
+        candidates.erase(std::unique(candidates.begin(), candidates.end(), [](const Ptr<Satellite>& a, const Ptr<Satellite>& b) {
+            return a->GetName() == b->GetName();
+        }), candidates.end());
+    }
+
+    // Now establish bidirectional connections
+    std::set<std::pair<std::string, std::string>> processedPairs;
+
+    for (const auto& [satA, candidatesA] : potentialConnections)
+    {
+        for (Ptr<Satellite> satB : candidatesA)
+        {
+            if (!satB)
+                continue;
+
+            const std::string nameA = satA->GetName();
+            const std::string nameB = satB->GetName();
+            std::pair<std::string, std::string> pairKey = nameA < nameB ? std::make_pair(nameA, nameB)
+                                                                         : std::make_pair(nameB, nameA);
+
+            if (processedPairs.count(pairKey))
+                continue;
+
+            processedPairs.insert(pairKey);
+
+            // Check if satB also has satA in its potential connections
+            auto it = potentialConnections.find(satB);
+            if (it != potentialConnections.end())
+            {
+                const auto& candidatesB = it->second;
+                if (std::find(candidatesB.begin(), candidatesB.end(), satA) != candidatesB.end())
+                {
+                    // Both satellites have each other in their potential lists, create the link
+                    if (CreateIslLink(satA, satB, maxRange))
+                    {
+                        Ptr<SatelliteNetDevice> devA = GetOrCreateSatelliteNetDevice(satA);
+                        Ptr<SatelliteNetDevice> devB = GetOrCreateSatelliteNetDevice(satB);
+                        if (devA && devB)
+                        {
+                            Ptr<SatelliteLink> link = CreateObject<SatelliteLink>(devA, devB);
+                            link->SetMaxRange(maxRange);
+                            link->SetPropagationDelayModel(CreateObject<IslPropagationDelayModel>());
+                            links.push_back(link);
+                        }
+                    }
+                }
+            }
         }
     }
 
+    NS_LOG_INFO("Created " << links.size() << " ISL links based on ring topology");
     return links;
 }
 
@@ -434,7 +545,13 @@ Constellation::ExportIslAsDot(const std::vector<Ptr<SatelliteLink>>& links, bool
     dot << "  splines=true;\n";
     dot << "  overlap=false;\n";
     dot << "  sep=1.0;\n";
-    dot << "  node [shape=ellipse, style=filled, fillcolor=lightblue];\n";
+
+    // Define color palette for rings
+    std::vector<std::string> ringColors = {
+        "lightblue", "lightgreen", "lightcoral", "lightgoldenrod", "lightpink",
+        "lightcyan", "lightsalmon", "lightseagreen", "lightsteelblue", "lightyellow",
+        "lavender", "mistyrose", "palegreen", "paleturquoise", "peachpuff"
+    };
 
     // Collect unique satellites and compute ground track positions
     std::map<std::string, Satellite::GroundTrackPosition> groundTrack;
@@ -475,8 +592,18 @@ Constellation::ExportIslAsDot(const std::vector<Ptr<SatelliteLink>>& links, bool
         x *= scale;
         y *= scale;
 
+        // Get ring color
+        std::string color = "lightblue"; // default
+        auto ringOpt = GetRingOfSatellite(satName);
+        if (ringOpt.has_value())
+        {
+            uint32_t ringId = ringOpt.value();
+            color = ringColors[ringId % ringColors.size()];
+        }
+
         dot << "  \"" << satName << "\" [label=\"" << satName << "\", pos=\""
-            << std::fixed << std::setprecision(2) << x << "," << y << "!\", tooltip=\"lat="
+            << std::fixed << std::setprecision(2) << x << "," << y << "!\", "
+            << "style=filled, fillcolor=" << color << ", tooltip=\"lat="
             << gt.latitude << " lon=" << gt.longitude << " alt=" << gt.altitude << "m\"];\n";
     }
 
@@ -527,6 +654,105 @@ Constellation::ExportIslAsDot(const std::vector<Ptr<SatelliteLink>>& links, bool
     dot << "}\n";
 
     return dot.str();
+}
+
+double
+Constellation::CalculateSatelliteDistance(Ptr<Satellite> satA, Ptr<Satellite> satB)
+{
+    Vector3D posA = satA->GetPosition();
+    Vector3D posB = satB->GetPosition();
+
+    double dx = posA.x - posB.x;
+    double dy = posA.y - posB.y;
+    double dz = posA.z - posB.z;
+
+    return std::sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+Ptr<Satellite>
+Constellation::FindClosestSatellite(Ptr<Satellite> reference, const std::vector<Ptr<Satellite>>& candidates)
+{
+    if (candidates.empty())
+        return nullptr;
+
+    Ptr<Satellite> closest = nullptr;
+    double minDistance = std::numeric_limits<double>::max();
+
+    for (Ptr<Satellite> candidate : candidates)
+    {
+        if (candidate == reference)
+        {
+            continue;
+        }
+
+        double distance = CalculateSatelliteDistance(reference, candidate);
+        if (distance < minDistance)
+        {
+            minDistance = distance;
+            closest = candidate;
+        }
+    }
+
+    return closest;
+}
+
+Ptr<SatelliteNetDevice>
+Constellation::GetOrCreateSatelliteNetDevice(Ptr<Satellite> satellite)
+{
+    if (!satellite)
+    {
+        return nullptr;
+    }
+
+    for (uint32_t i = 0; i < satellite->GetNDevices(); ++i)
+    {
+        Ptr<SatelliteNetDevice> device = DynamicCast<SatelliteNetDevice>(satellite->GetDevice(i));
+        if (device)
+        {
+            return device;
+        }
+    }
+
+    Ptr<SatelliteNetDevice> device = CreateObject<SatelliteNetDevice>();
+    satellite->AddDevice(device);
+    device->SetNode(satellite);
+    return device;
+}
+
+bool
+Constellation::CreateIslLink(Ptr<Satellite> satA, Ptr<Satellite> satB, double maxRange)
+{
+    if (!satA || !satB || satA == satB)
+    {
+        return false;
+    }
+
+    // Check if distance is within range
+    double distance = CalculateSatelliteDistance(satA, satB);
+    if (distance > maxRange)
+    {
+        return false;
+    }
+
+    // Create mobility models if they don't exist
+    if (!satA->GetObject<SatelliteMobilityModel>())
+    {
+        Ptr<SatelliteMobilityModel> mobility = CreateObject<SatelliteMobilityModel>();
+        mobility->SetSatellite(satA);
+        satA->AggregateObject(mobility);
+    }
+
+    if (!satB->GetObject<SatelliteMobilityModel>())
+    {
+        Ptr<SatelliteMobilityModel> mobility = CreateObject<SatelliteMobilityModel>();
+        mobility->SetSatellite(satB);
+        satB->AggregateObject(mobility);
+    }
+
+    // Ensure network devices exist on both satellites.
+    Ptr<SatelliteNetDevice> devA = GetOrCreateSatelliteNetDevice(satA);
+    Ptr<SatelliteNetDevice> devB = GetOrCreateSatelliteNetDevice(satB);
+    return devA && devB;
 }
 
 }  // namespace ns3

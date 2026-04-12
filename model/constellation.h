@@ -21,6 +21,7 @@ namespace ns3
 {
 
 class SatelliteLink;
+class SatelliteNetDevice;
 
 /**
  * \brief A constellation of satellites for orbital simulations
@@ -99,6 +100,12 @@ class Constellation : public Object
     std::unordered_map<std::string, uint32_t> m_satelliteRingMap; //!< satellite name -> ring-id
     std::string m_constellationName;
     std::string m_tleFile; //!< Path to TLE file referenced in ring file
+
+    // Helper methods for ISL creation
+    double CalculateSatelliteDistance(Ptr<Satellite> satA, Ptr<Satellite> satB);
+    Ptr<Satellite> FindClosestSatellite(Ptr<Satellite> reference, const std::vector<Ptr<Satellite>>& candidates);
+    Ptr<SatelliteNetDevice> GetOrCreateSatelliteNetDevice(Ptr<Satellite> satellite);
+    bool CreateIslLink(Ptr<Satellite> satA, Ptr<Satellite> satB, double maxRange);
 };
 
 }  // namespace ns3
