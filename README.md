@@ -156,7 +156,14 @@ Usage:
 This outputs DOT format to stdout, which you can redirect and render:
 
 ```bash
-./ns3 run isl-visualizer -- contrib/orbitshield/data/iridium-20260312.rings 2000000 > output.dot
+./ns3 run orbitshield-isl-visualizer -- contrib/orbitshield/data/iridium-20260312.rings 2000000 > output.dot
+neato -n -Tpng output.dot -o output.png
+```
+
+Or write directly to a file using the optional output-file argument:
+
+```bash
+./ns3 run orbitshield-isl-visualizer -- contrib/orbitshield/data/iridium-20260312.rings 2000000 output.dot
 neato -n -Tpng output.dot -o output.png
 ```
 

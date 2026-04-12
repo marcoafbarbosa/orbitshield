@@ -38,11 +38,22 @@ build_lib(
     test/test-orbitshield.cc
 )
 
+find_package(Boost COMPONENTS program_options QUIET)
+set(orbitshield_isl_visualizer_libraries ${liborbitshield})
+set(orbitshield_isl_visualizer_definitions)
+if(Boost_PROGRAM_OPTIONS_FOUND)
+  list(APPEND orbitshield_isl_visualizer_libraries Boost::program_options)
+  list(APPEND orbitshield_isl_visualizer_definitions HAVE_BOOST_PROGRAM_OPTIONS)
+else()
+  message(STATUS "Boost.Program_options not found; isl-visualizer will use its fallback parser")
+endif()
+
 build_exec(
   EXECNAME orbitshield-isl-visualizer
   SOURCE_FILES
     tools/isl-visualizer.cc
-  LIBRARIES_TO_LINK ${liborbitshield}
+  LIBRARIES_TO_LINK ${orbitshield_isl_visualizer_libraries}
+  DEFINITIONS ${orbitshield_isl_visualizer_definitions}
   EXECUTABLE_DIRECTORY_PATH
         ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/orbitshield/
   INSTALL_DIRECTORY_PATH ${CMAKE_INSTALL_LIBEXECDIR}/orbitshield
