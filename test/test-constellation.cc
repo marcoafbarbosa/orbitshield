@@ -65,14 +65,26 @@ ConstellationTestCase::TestSimple()
     const char* ringFilename = "constellation-test.rings";
     {
         std::ofstream ringFile(ringFilename);
-        ringFile << "constellationName=TestConstellation\n";
-        ringFile << "ringCount=2\n";
-        ringFile << "ring.0=SAT-1\n";
-        ringFile << "ring.1=SAT-2\n";
+        ringFile << "constellationName: TestConstellation\n";
+        ringFile << "ringCount: 2\n";
+        ringFile << "rings:\n";
+        ringFile << "  - id: 0\n";
+        ringFile << "    satellites:\n";
+        ringFile << "      - SAT-1\n";
+        ringFile << "  - id: 1\n";
+        ringFile << "    satellites:\n";
+        ringFile << "      - SAT-2\n";
+        ringFile << "groundStations:\n";
+        ringFile << "  - name: Test Ground Station\n";
+        ringFile << "    latitude: 1.5\n";
+        ringFile << "    longitude: -2.5\n";
     }
 
     constellation->LoadFromRingFile(ringFilename);
     NS_TEST_EXPECT_MSG_EQ(constellation->GetRingCount(), 2u, "Ring count should be 2");
+    NS_TEST_EXPECT_MSG_EQ(constellation->GetConstellationName(),
+                          std::string("TestConstellation"),
+                          "Constellation name should be read from YAML metadata");
 
     const auto& ring0 = constellation->GetSatellitesInRing(0);
     const auto& ring1 = constellation->GetSatellitesInRing(1);
@@ -87,6 +99,26 @@ ConstellationTestCase::TestSimple()
     NS_TEST_EXPECT_MSG_EQ(prev0.size(), 1u, "Previous ring from 0 should have 1 satellite");
     NS_TEST_EXPECT_MSG_EQ(next0[0]->GetName(), std::string("SAT-2"), "Next ring from 0 should be SAT-2");
     NS_TEST_EXPECT_MSG_EQ(prev0[0]->GetName(), std::string("SAT-2"), "Previous ring from 0 should be SAT-2 (wrap-around)");
+
+    const auto& groundStations = constellation->GetGroundStations();
+    NS_TEST_EXPECT_MSG_EQ(groundStations.size(), 1u, "Expected one ground station in YAML metadata");
+    NS_TEST_EXPECT_MSG_EQ(groundStations[0]->GetName(),
+                          std::string("Test Ground Station"),
+                          "Ground station name should match YAML data");
+    NS_TEST_EXPECT_MSG_EQ_TOL(groundStations[0]->GetLatitude(),
+                              1.5,
+                              1e-9,
+                              "Ground station latitude should match YAML data");
+    NS_TEST_EXPECT_MSG_EQ_TOL(groundStations[0]->GetLongitude(),
+                              -2.5,
+                              1e-9,
+                              "Ground station longitude should match YAML data");
+
+    std::vector<Ptr<SatelliteLink>> links = constellation->CreateIslLinks(2000000.0);
+    std::string dot = constellation->ExportIslAsDot(links, true);
+    NS_TEST_EXPECT_MSG_NE(dot.find("\"GS:Test Ground Station\""),
+                          std::string::npos,
+                          "DOT output should include a node for the ground station");
 
     std::remove(ringFilename);
     std::remove(filename);
@@ -158,7 +190,7 @@ ConstellationTestCase::TestIslRefreshHonorsRange()
     Simulator::Destroy();
 
     Ptr<Constellation> constellation = CreateObject<Constellation>();
-    constellation->LoadFromRingFile("contrib/orbitshield/data/iridium-20260312.rings");
+    constellation->LoadFromRingFile("contrib/orbitshield/data/iridium-20260312.yaml");
 
     const double maxRange = 3000000.0; // 3000 km
     const Time step = Seconds(60);
