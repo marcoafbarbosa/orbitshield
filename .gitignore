@@ -16,3 +16,4 @@ build/
 *.pyc
 __pycache__/
 .*.dep
+tools/.ne_110m_land.geojson

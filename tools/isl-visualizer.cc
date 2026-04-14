@@ -22,19 +22,22 @@
  * Tool to visualize Inter-Satellite Links (ISLs) in a constellation.
  * Generates a Graphviz DOT format representation of the ISL topology.
  *
- * Usage: isl-visualizer --ringFile=<path> --maxRange=<meters> [--outputFile=<path>]
+ * Usage: isl-visualizer --ringFile=<path> [--maxRange=<km>]
+ *        [--simTime=<seconds>] [--outputFile=<path>]
  *
  * Example:
- *   ./ns3 run orbitshield-isl-visualizer -- --ringFile=contrib/orbitshield/data/iridium-20260312.rings --maxRange=5000000
- *   ./ns3 run orbitshield-isl-visualizer -- --ringFile=contrib/orbitshield/data/iridium-20260312.rings --maxRange=5000000 --outputFile=output.dot
+ *   ./ns3 run orbitshield-isl-visualizer -- --ringFile=contrib/orbitshield/data/iridium-20260312.rings
+ *   ./ns3 run orbitshield-isl-visualizer -- --ringFile=contrib/orbitshield/data/iridium-20260312.rings --maxRange=5000 --simTime=600 --outputFile=output.dot
  */
 
 #include "ns3/core-module.h"
 #include "ns3/network-module.h"
 #include "ns3/orbitshield-module.h"
+#include "ns3/orbitshield-utils.h"
 
 #include <iostream>
 #include <fstream>
+#include <sstream>
 
 using namespace ns3;
 
@@ -46,11 +49,13 @@ main(int argc, char* argv[])
 {
     std::string ringFile = "contrib/orbitshield/data/iridium-20260312.rings";
     std::string outputFile;
-    double maxRange = 2000000.0;
+    double maxRangeKm = 5000.0;   // 5000 km default for LEO at ~700 km altitude
+    double simTimeSec = 0.0;
 
     CommandLine cmd(__FILE__);
     cmd.AddValue("ringFile", "Path to constellation ring file", ringFile);
-    cmd.AddValue("maxRange", "Maximum ISL range in meters", maxRange);
+    cmd.AddValue("maxRange", "Maximum ISL range in kilometers", maxRangeKm);
+    cmd.AddValue("simTime", "Simulation time in seconds used to compute positions/links", simTimeSec);
     cmd.AddValue("outputFile", "Optional path to write Graphviz DOT output", outputFile);
     cmd.Parse(argc, argv);
 
@@ -60,9 +65,18 @@ main(int argc, char* argv[])
         return 1;
     }
 
-    if (maxRange <= 0.0)
+    if (maxRangeKm <= 0.0)
     {
         std::cerr << "Error: maxRange must be positive\n";
+        return 1;
+    }
+
+    // Convert from km to meters
+    double maxRangeMeters = maxRangeKm * 1000.0;
+
+    if (simTimeSec < 0.0)
+    {
+        std::cerr << "Error: simTime must be >= 0\n";
         return 1;
     }
 
@@ -89,11 +103,33 @@ main(int argc, char* argv[])
             return 1;
         }
 
+        if (simTimeSec > 0.0)
+        {
+            Simulator::Stop(Seconds(simTimeSec));
+            Simulator::Run();
+        }
+
         // Create ISL links
-        std::vector<Ptr<ns3::SatelliteLink>> links = constellation->CreateIslLinks(maxRange);
+        std::vector<Ptr<ns3::SatelliteLink>> links = constellation->CreateIslLinks(maxRangeMeters);
 
         // Export as DOT format
         std::string dotOutput = constellation->ExportIslAsDot(links, true);
+
+        // Add metadata consumed by the world-map renderer.
+        const perturb::JulianDate startJd = satellites.front()->GetSimulationStartJD();
+        const perturb::JulianDate currentJd = startJd + (simTimeSec / 86400.0);
+        const std::string utcString = JulianDateToString(currentJd);
+        std::string constellationName = constellation->GetConstellationName();
+        if (constellationName.empty())
+        {
+            constellationName = "Constellation";
+        }
+
+        std::ostringstream metadata;
+        metadata << "// orbitshield.constellation=" << constellationName << "\n";
+        metadata << "// orbitshield.utc=" << utcString << " UTC\n";
+        metadata << "// orbitshield.sim_time_s=" << simTimeSec << "\n";
+        dotOutput = metadata.str() + dotOutput;
 
         if (!outputFile.empty())
         {
@@ -111,10 +147,12 @@ main(int argc, char* argv[])
             std::cout << dotOutput;
         }
 
+        Simulator::Destroy();
         return 0;
     }
     catch (const std::exception& e)
     {
+        Simulator::Destroy();
         std::cerr << "Error: " << e.what() << "\n";
         return 1;
     }
