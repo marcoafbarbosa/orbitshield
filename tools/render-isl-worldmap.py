@@ -3,7 +3,7 @@
 render-isl-worldmap.py
 
 Reads the Graphviz DOT file produced by the isl-visualizer tool, extracts
-satellite lat/lon positions and ISL edges, and renders them over an
+satellite/ground-station positions and ISL edges, and renders them over an
 equirectangular world map using matplotlib.
 
 The output is a publication-quality PNG where every satellite dot is placed
@@ -89,7 +89,8 @@ def _draw_land(ax, geojson: dict) -> None:
 
 # ── DOT file parsing ──────────────────────────────────────────────────────────
 _NODE_RE = re.compile(r'"([^"]+)"\s*\[([^\]]+)\]')
-_TOOLTIP_RE = re.compile(r'tooltip="lat=([-\d.]+)\s+lon=([-\d.]+)\s+alt=([-\d.]+)m"')
+_SAT_TOOLTIP_RE = re.compile(r'tooltip="lat=([-\d.]+)\s+lon=([-\d.]+)\s+alt=([-\d.]+)m"')
+_GS_TOOLTIP_RE = re.compile(r'tooltip="type=ground-station\s+lat=([-\d.]+)\s+lon=([-\d.]+)"')
 _FILLCOLOR_RE = re.compile(r'fillcolor=(\w+)')
 _EDGE_RE = re.compile(r'"([^"]+)"\s*--\s*"([^"]+)"\s*\[label="([^"]+)"\]')
 _META_CONSTELLATION_RE = re.compile(r'^\s*//\s*orbitshield\.constellation=(.+?)\s*$', re.MULTILINE)
@@ -111,25 +112,36 @@ def _parse_dot(dot_path: str):
     Parse a DOT file produced by isl-visualizer.
 
     Returns:
-        nodes: dict  name -> {lat, lon, alt, color}
+        sat_nodes: dict name -> {lat, lon, alt, color}
+        gs_nodes: dict  name -> {lat, lon, color}
         edges: list  [(nameA, nameB, label), …]
         metadata: dict with optional keys {constellation, utc}
     """
     with open(dot_path, encoding="utf-8") as fh:
         content = fh.read()
 
-    nodes = {}
+    sat_nodes = {}
+    gs_nodes = {}
     for m in _NODE_RE.finditer(content):
         name = m.group(1)
         attrs = m.group(2)
-        tm = _TOOLTIP_RE.search(attrs)
+        tm = _SAT_TOOLTIP_RE.search(attrs)
         cm = _FILLCOLOR_RE.search(attrs)
         if tm:
-            nodes[name] = {
+            sat_nodes[name] = {
                 "lat": float(tm.group(1)),
                 "lon": _normalize_lon(float(tm.group(2))),
                 "alt": float(tm.group(3)),
                 "color": _GRAPHVIZ_TO_MPL.get(cm.group(1), cm.group(1)) if cm else "lightblue",
+            }
+            continue
+
+        gm = _GS_TOOLTIP_RE.search(attrs)
+        if gm:
+            gs_nodes[name] = {
+                "lat": float(gm.group(1)),
+                "lon": _normalize_lon(float(gm.group(2))),
+                "color": _GRAPHVIZ_TO_MPL.get(cm.group(1), cm.group(1)) if cm else "khaki",
             }
 
     edges = []
@@ -149,7 +161,7 @@ def _parse_dot(dot_path: str):
     if m_utc:
         metadata["utc"] = m_utc.group(1).strip()
 
-    return nodes, edges, metadata
+    return sat_nodes, gs_nodes, edges, metadata
 
 
 def _infer_constellation_name(nodes: dict) -> str:
@@ -204,12 +216,15 @@ def _segments_antimeridian(lon0: float, lat0: float, lon1: float, lat1: float):
 
 # ── Main renderer ─────────────────────────────────────────────────────────────
 def render(dot_path: str, out_path: str, width: float, height: float, dpi: int, show_labels: bool) -> None:
-    nodes, edges, metadata = _parse_dot(dot_path)
-    if not nodes:
-        print("Error: no satellite nodes found in DOT file.", file=sys.stderr)
+    sat_nodes, gs_nodes, edges, metadata = _parse_dot(dot_path)
+    if not sat_nodes and not gs_nodes:
+        print("Error: no plottable nodes found in DOT file.", file=sys.stderr)
         sys.exit(1)
 
-    print(f"  {len(nodes)} satellites, {len(edges)} ISL edges", file=sys.stderr)
+    print(
+        f"  {len(sat_nodes)} satellites, {len(gs_nodes)} ground stations, {len(edges)} ISL edges",
+        file=sys.stderr,
+    )
 
     land = _load_land_geojson()
 
@@ -230,11 +245,12 @@ def render(dot_path: str, out_path: str, width: float, height: float, dpi: int, 
     ax.axhline(0, color="#aaaaaa", linewidth=0.5, zorder=1)
 
     # ISL edges
+    all_nodes = {**sat_nodes, **gs_nodes}
     for a, b, label in edges:
-        if a not in nodes or b not in nodes:
+        if a not in all_nodes or b not in all_nodes:
             continue
-        lon0, lat0 = nodes[a]["lon"], nodes[a]["lat"]
-        lon1, lat1 = nodes[b]["lon"], nodes[b]["lat"]
+        lon0, lat0 = all_nodes[a]["lon"], all_nodes[a]["lat"]
+        lon1, lat1 = all_nodes[b]["lon"], all_nodes[b]["lat"]
         for seg in _segments_antimeridian(lon0, lat0, lon1, lat1):
             lons = [p[0] for p in seg]
             lats = [p[1] for p in seg]
@@ -243,7 +259,7 @@ def render(dot_path: str, out_path: str, width: float, height: float, dpi: int, 
 
     # Satellite nodes, grouped by ring color for a single scatter call each
     color_groups: dict[str, list] = {}
-    for name, info in nodes.items():
+    for name, info in sat_nodes.items():
         color_groups.setdefault(info["color"], []).append((info["lon"], info["lat"], name))
 
     for color, entries in color_groups.items():
@@ -264,6 +280,36 @@ def render(dot_path: str, out_path: str, width: float, height: float, dpi: int, 
                     zorder=5,
                 )
 
+    # Ground-station nodes with a distinct marker style.
+    if gs_nodes:
+        gs_lons = [info["lon"] for info in gs_nodes.values()]
+        gs_lats = [info["lat"] for info in gs_nodes.values()]
+        ax.scatter(
+            gs_lons,
+            gs_lats,
+            s=85,
+            marker="s",
+            color="#f4d35e",
+            edgecolors="#5b4a00",
+            linewidths=0.7,
+            zorder=6,
+        )
+        if show_labels:
+            for name, info in gs_nodes.items():
+                label = name[3:] if name.startswith("GS:") else name
+                ax.annotate(
+                    label,
+                    (info["lon"], info["lat"]),
+                    fontsize=8,
+                    ha="center",
+                    va="bottom",
+                    xytext=(0, 4),
+                    textcoords="offset points",
+                    clip_on=True,
+                    annotation_clip=True,
+                    zorder=7,
+                )
+
     # Axes cosmetics
     ax.set_xlim(-180, 180)
     ax.set_ylim(-90, 90)
@@ -276,7 +322,7 @@ def render(dot_path: str, out_path: str, width: float, height: float, dpi: int, 
     ax.set_yticks(range(-90, 91, 30))
     ax.tick_params(labelsize=7)
 
-    constellation_name = metadata.get("constellation", _infer_constellation_name(nodes))
+    constellation_name = metadata.get("constellation", _infer_constellation_name(sat_nodes or gs_nodes))
     utc_value = metadata.get("utc")
     if utc_value:
         title = f"{constellation_name} - {utc_value}"

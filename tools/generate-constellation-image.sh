@@ -10,7 +10,7 @@
 #   ./contrib/orbitshield/tools/generate-constellation-image.sh [OPTIONS]
 #
 # Options:
-#   --ringFile=<path>     Path to the .rings file   (default: contrib/orbitshield/data/iridium-20260312.rings)
+#   --ringFile=<path>     Path to the .rings file   (default: contrib/orbitshield/data/iridium-20260312.yaml)
 #   --maxRange=<km>       Maximum ISL range in km   (default: 5000)
 #   --outputFile=<path>   DOT output file            (default: out.dot)
 #   --pngFile=<path>      PNG output file            (default: derived from --outputFile, e.g. out.png)
@@ -36,7 +36,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ── defaults ────────────────────────────────────────────────────────────────
-RING_FILE="contrib/orbitshield/data/iridium-20260312.rings"
+RING_FILE="contrib/orbitshield/data/iridium-20260312.yaml"
 MAX_RANGE="3000"  # km (3000 km is typical for LEO at ~700 km altitude)
 DOT_FILE="out.dot"
 PNG_FILE=""

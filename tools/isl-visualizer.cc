@@ -26,8 +26,8 @@
  *        [--simTime=<seconds>] [--outputFile=<path>]
  *
  * Example:
- *   ./ns3 run orbitshield-isl-visualizer -- --ringFile=contrib/orbitshield/data/iridium-20260312.rings
- *   ./ns3 run orbitshield-isl-visualizer -- --ringFile=contrib/orbitshield/data/iridium-20260312.rings --maxRange=5000 --simTime=600 --outputFile=output.dot
+ *   ./ns3 run orbitshield-isl-visualizer -- --ringFile=contrib/orbitshield/data/iridium-20260312.yaml
+ *   ./ns3 run orbitshield-isl-visualizer -- --ringFile=contrib/orbitshield/data/iridium-20260312.yaml --maxRange=5000 --simTime=600 --outputFile=output.dot
  */
 
 #include "ns3/core-module.h"
@@ -47,7 +47,7 @@ using namespace ns3;
 int
 main(int argc, char* argv[])
 {
-    std::string ringFile = "contrib/orbitshield/data/iridium-20260312.rings";
+    std::string ringFile = "contrib/orbitshield/data/iridium-20260312.yaml";
     std::string outputFile;
     double maxRangeKm = 5000.0;   // 5000 km default for LEO at ~700 km altitude
     double simTimeSec = 0.0;
