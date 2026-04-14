@@ -7,6 +7,7 @@
 
 #include "ns3/core-module.h"
 #include "ns3/network-module.h"
+#include "ground-station.h"
 #include "satellite.h"
 
 #include <perturb/perturb.hpp>
@@ -81,12 +82,13 @@ class Constellation : public Object
      */
     std::string ExportIslAsDot(const std::vector<Ptr<SatelliteLink>>& links, bool activeOnly = true) const;
 
-    // Ring metadata (optional) for constellation structure
+    // YAML constellation description metadata
     void LoadFromRingFile(const std::string& filename);
     void LoadFromRingFile(std::istream& file, const std::string& basePath = "");
 
     uint32_t GetRingCount() const;
     std::string GetConstellationName() const;
+    const std::vector<Ptr<GroundStation>>& GetGroundStations() const;
     std::optional<uint32_t> GetRingOfSatellite(const std::string& satName) const;
     const std::vector<Ptr<Satellite>>& GetSatellitesInRing(uint32_t ringId) const;
     const std::vector<Ptr<Satellite>>& GetPreviousRingSatellites(uint32_t ringId) const;
@@ -125,6 +127,7 @@ class Constellation : public Object
     std::unordered_map<std::string, uint32_t> m_satelliteRingMap; //!< satellite name -> ring-id
     std::string m_constellationName;
     std::string m_tleFile; //!< Path to TLE file referenced in ring file
+    std::vector<Ptr<GroundStation>> m_groundStations;
 
     // Time-aware ISL topology management (driven by ns-3 Simulator via scheduled events)
     EventId m_refreshEvent;                   //!< Pending topology refresh event

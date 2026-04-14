@@ -9,6 +9,13 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(perturb)
 
+FetchContent_Declare(
+  yaml_cpp
+  GIT_REPOSITORY "https://github.com/jbeder/yaml-cpp"
+  GIT_TAG "yaml-cpp-0.9.0"
+)
+FetchContent_MakeAvailable(yaml_cpp)
+
 target_compile_options(perturb PRIVATE -Wno-unused-variable)
 
 
@@ -16,6 +23,7 @@ build_lib(
   LIBNAME orbitshield
   SOURCE_FILES
     model/constellation.cc
+    model/ground-station.cc
     model/isl-propagation-delay-model.cc
     model/orbitshield-utils.cc
     model/satellite-link.cc
@@ -24,19 +32,22 @@ build_lib(
     model/satellite.cc
   HEADER_FILES
     model/constellation.h
+    model/ground-station.h
     model/isl-propagation-delay-model.h
     model/orbitshield-utils.h
     model/satellite-link.h
     model/satellite-mobility-model.h
     model/satellite-net-device.h
     model/satellite.h
-  LIBRARIES_TO_LINK ${libcore} ${libnetwork} ${libmobility} ${libpropagation} perturb
+  LIBRARIES_TO_LINK ${libbuildings} ${libcore} ${libnetwork} ${libmobility} ${libpropagation} perturb
   TEST_SOURCES
     test/test-constellation.cc
     test/test-isl.cc
     test/test-satellite.cc
     test/test-orbitshield.cc
 )
+
+target_link_libraries(${liborbitshield} PRIVATE yaml-cpp)
 
 find_package(Boost COMPONENTS program_options QUIET)
 set(orbitshield_isl_visualizer_libraries ${liborbitshield})

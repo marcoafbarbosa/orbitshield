@@ -5,7 +5,7 @@
 /**
  * \file
  * \ingroup orbitshield
- * Example of loading multiple satellites from ring metadata file using Constellation.
+ * Example of loading multiple satellites from a YAML constellation description file.
  */
 
 #include "ns3/core-module.h"
@@ -19,18 +19,18 @@ using namespace ns3;
 NS_LOG_COMPONENT_DEFINE("OrbitShieldLoadFromRingExample");
 
 /**
- * \brief Main function demonstrating loading multiple satellites from ring metadata file using Constellation
+ * \brief Main function demonstrating loading multiple satellites from a YAML constellation description file
  */
 int
 main(int argc, char* argv[])
 {
     LogComponentEnable("OrbitShieldLoadFromRingExample", LOG_LEVEL_INFO);
 
-    NS_LOG_INFO("Loading satellites from iridium ring file using Constellation...");
+    NS_LOG_INFO("Loading satellites from Iridium constellation description file using Constellation...");
 
-    // Create a constellation and load satellites from the ring metadata file
+    // Create a constellation and load satellites from the YAML description file
     Ptr<Constellation> constellation = CreateObject<Constellation>();
-    constellation->LoadFromRingFile("contrib/orbitshield/data/iridium-20260312.rings");
+    constellation->LoadFromRingFile("contrib/orbitshield/data/iridium-20260312.yaml");
 
     // Get the satellites from the constellation
     const auto& satellites = constellation->GetSatellites();
@@ -41,6 +41,13 @@ main(int argc, char* argv[])
     for (const auto& satellite : satellites)
     {
         NS_LOG_INFO("Satellite " << satellite->GetName() << ": Position=" << satellite->GetPosition());
+    }
+
+    for (const auto& groundStation : constellation->GetGroundStations())
+    {
+        NS_LOG_INFO("Ground station " << groundStation->GetName() << ": lat="
+                                      << groundStation->GetLatitude() << ", lon="
+                                      << groundStation->GetLongitude());
     }
 
     NS_LOG_INFO("Finished processing all satellites");

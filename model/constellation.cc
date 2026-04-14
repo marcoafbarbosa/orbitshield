@@ -12,16 +12,18 @@
 #include "ns3/log.h"
 #include "ns3/simulator.h"
 
-#include <fstream>
-#include <string>
-#include <sstream>
-#include <set>
-#include <map>
-#include <unordered_map>
-#include <limits>
-#include <cmath>
-#include <iomanip>
+#include <yaml-cpp/yaml.h>
+
 #include <algorithm>
+#include <cmath>
+#include <fstream>
+#include <iomanip>
+#include <limits>
+#include <map>
+#include <set>
+#include <sstream>
+#include <string>
+#include <unordered_map>
 
 namespace ns3
 {
@@ -81,34 +83,29 @@ Constellation::LoadFromTleFile(std::istream& file)
     std::string currentName;
     std::string currentLine1;
 
-    // First pass: collect all TLE data
     while (std::getline(file, line))
     {
-        // Remove carriage return if present (Windows line endings)
         if (!line.empty() && line.back() == '\r')
         {
             line.pop_back();
         }
 
         if (line.empty())
+        {
             continue;
+        }
 
-        // TLE entries start with "0" for name
         if (line[0] == '0')
         {
-            currentName = line.substr(2); // Skip "0 "
+            currentName = line.substr(2);
         }
-        // Line 1 starts with "1"
         else if (line[0] == '1' && !currentName.empty())
         {
             currentLine1 = line;
         }
-        // Line 2 starts with "2"
         else if (line[0] == '2' && !currentName.empty() && !currentLine1.empty())
         {
             tleDataList.push_back({currentName, currentLine1, line});
-
-            // Reset for next satellite
             currentName.clear();
             currentLine1.clear();
         }
@@ -120,8 +117,7 @@ Constellation::LoadFromTleFile(std::istream& file)
         return;
     }
 
-    // Find the maximum epoch
-    perturb::JulianDate maxEpoch(perturb::DateTime(1900, 1, 1, 0, 0, 0)); // Start with a very old date
+    perturb::JulianDate maxEpoch(perturb::DateTime(1900, 1, 1, 0, 0, 0));
     for (const auto& tleData : tleDataList)
     {
         std::string line1 = tleData.line1;
@@ -135,16 +131,18 @@ Constellation::LoadFromTleFile(std::istream& file)
     }
     m_simulationStartJD = maxEpoch;
 
-    // Second pass: create satellites
     for (auto& tleData : tleDataList)
     {
-        Ptr<Satellite> satellite = CreateObject<Satellite>(tleData.name, tleData.line1, tleData.line2, m_simulationStartJD);
+        Ptr<Satellite> satellite =
+            CreateObject<Satellite>(tleData.name, tleData.line1, tleData.line2, m_simulationStartJD);
         m_satellites.push_back(satellite);
 
         NS_LOG_INFO("Loaded satellite: " << tleData.name);
     }
 
-    NS_LOG_INFO("Loaded " << m_satellites.size() << " satellites with simulation start at " << JulianDateToString(m_simulationStartJD));
+    NS_LOG_INFO("Loaded " << m_satellites.size()
+                           << " satellites with simulation start at "
+                           << JulianDateToString(m_simulationStartJD));
 }
 
 const std::vector<Ptr<Satellite>>&
@@ -156,29 +154,6 @@ Constellation::GetSatellites() const
 
 namespace
 {
-static inline void TrimString(std::string& s)
-{
-    auto notSpace = [](int ch) { return !std::isspace(ch); };
-    s.erase(s.begin(), std::find_if(s.begin(), s.end(), notSpace));
-    s.erase(std::find_if(s.rbegin(), s.rend(), notSpace).base(), s.end());
-}
-
-static std::vector<std::string>
-SplitAndTrim(const std::string& s, char delim)
-{
-    std::vector<std::string> tokens;
-    std::istringstream stream(s);
-    std::string item;
-    while (std::getline(stream, item, delim))
-    {
-        TrimString(item);
-        if (!item.empty())
-        {
-            tokens.push_back(item);
-        }
-    }
-    return tokens;
-}
 } // anonymous namespace
 
 static const std::vector<Ptr<Satellite>>&
@@ -193,7 +168,6 @@ Constellation::LoadFromRingFile(const std::string& filename)
 {
     NS_LOG_FUNCTION(this << filename);
 
-    // Extract directory from filename for resolving relative TLE paths
     std::string basePath;
     size_t lastSlash = filename.find_last_of("/\\");
     if (lastSlash != std::string::npos)
@@ -222,82 +196,108 @@ Constellation::LoadFromRingFile(std::istream& file, const std::string& basePath)
     m_ringCount = 0;
     m_constellationName.clear();
     m_tleFile.clear();
+    m_groundStations.clear();
 
-    std::string line;
     std::map<uint32_t, std::vector<std::string>> ringNames;
+    std::stringstream buffer;
+    buffer << file.rdbuf();
 
-    while (std::getline(file, line))
+    try
     {
-        TrimString(line);
-        if (line.empty() || line[0] == '#')
-            continue;
+        YAML::Node root = YAML::Load(buffer.str());
 
-        auto pos = line.find('=');
-        if (pos == std::string::npos)
-            continue;
+        if (root["constellationName"])
+        {
+            m_constellationName = root["constellationName"].as<std::string>();
+        }
 
-        std::string key = line.substr(0, pos);
-        std::string value = line.substr(pos + 1);
-        TrimString(key);
-        TrimString(value);
+        if (root["tleFile"])
+        {
+            m_tleFile = root["tleFile"].as<std::string>();
+        }
 
-        if (key == "constellationName")
+        if (root["ringCount"])
         {
-            m_constellationName = value;
+            m_ringCount = root["ringCount"].as<uint32_t>();
         }
-        else if (key == "tleFile")
+
+        if (const YAML::Node ringsNode = root["rings"])
         {
-            m_tleFile = value;
-        }
-        else if (key == "ringCount")
-        {
-            try
+            if (!ringsNode.IsSequence())
             {
-                m_ringCount = static_cast<uint32_t>(std::stoul(value));
+                NS_LOG_WARN("'rings' must be a YAML sequence");
             }
-            catch (...) {
-                NS_LOG_WARN("Invalid ringCount value in ring file: " << value);
-                m_ringCount = 0;
-            }
-        }
-        else if (key.rfind("ring.", 0) == 0)
-        {
-            uint32_t ringId = 0;
-            try
+            else
             {
-                std::string idString = key.substr(5);
-                ringId = static_cast<uint32_t>(std::stoul(idString));
-            }
-            catch (...) {
-                NS_LOG_WARN("Invalid ring identifier in ring file: " << key);
-                continue;
-            }
-            std::vector<std::string> names = SplitAndTrim(value, ',');
-            for (const auto &satName : names)
-            {
-                if (ringNames[ringId].end() != std::find(ringNames[ringId].begin(), ringNames[ringId].end(), satName))
+                for (const auto& ringNode : ringsNode)
                 {
-                    continue;
+                    if (!ringNode["id"])
+                    {
+                        NS_LOG_WARN("Ignoring ring entry without 'id'");
+                        continue;
+                    }
+
+                    uint32_t ringId = ringNode["id"].as<uint32_t>();
+                    auto& names = ringNames[ringId];
+
+                    const YAML::Node satellitesNode = ringNode["satellites"];
+                    if (!satellitesNode || !satellitesNode.IsSequence())
+                    {
+                        NS_LOG_WARN("Ignoring ring " << ringId << " without a 'satellites' sequence");
+                        continue;
+                    }
+
+                    for (const auto& satNode : satellitesNode)
+                    {
+                        const std::string satName = satNode.as<std::string>();
+                        if (std::find(names.begin(), names.end(), satName) == names.end())
+                        {
+                            names.push_back(satName);
+                        }
+                    }
                 }
-                ringNames[ringId].push_back(satName);
             }
         }
-        else
+
+        if (const YAML::Node groundStationsNode = root["groundStations"])
         {
-            NS_LOG_WARN("Unknown ring file key: " << key);
+            if (!groundStationsNode.IsSequence())
+            {
+                NS_LOG_WARN("'groundStations' must be a YAML sequence");
+            }
+            else
+            {
+                for (const auto& stationNode : groundStationsNode)
+                {
+                    if (!stationNode["name"] || !stationNode["latitude"] || !stationNode["longitude"])
+                    {
+                        NS_LOG_WARN("Ignoring incomplete ground station entry in YAML");
+                        continue;
+                    }
+
+                    Ptr<GroundStation> station = CreateObject<GroundStation>();
+                    station->SetName(stationNode["name"].as<std::string>());
+                    station->SetLatitude(stationNode["latitude"].as<double>());
+                    station->SetLongitude(stationNode["longitude"].as<double>());
+                    m_groundStations.push_back(station);
+                }
+            }
         }
     }
+    catch (const YAML::Exception& error)
+    {
+        NS_LOG_ERROR("Failed to parse constellation YAML: " << error.what());
+        return;
+    }
 
-    // Load TLE data if specified
     if (!m_tleFile.empty())
     {
         std::string tlePath = basePath + m_tleFile;
         NS_LOG_INFO("Loading TLE data from: " << tlePath);
-        m_satellites.clear(); // Clear existing satellites before loading new ones
+        m_satellites.clear();
         LoadFromTleFile(tlePath);
     }
 
-    // Map TLE satellites into rings using existing m_satellites
     std::unordered_map<std::string, Ptr<Satellite>> nameToSat;
     for (const auto& sat : m_satellites)
     {
@@ -305,7 +305,6 @@ Constellation::LoadFromRingFile(std::istream& file, const std::string& basePath)
     }
 
     std::map<uint32_t, std::vector<Ptr<Satellite>>> realRings;
-
     for (const auto& [ringId, names] : ringNames)
     {
         for (const auto& name : names)
@@ -324,7 +323,6 @@ Constellation::LoadFromRingFile(std::istream& file, const std::string& basePath)
     }
 
     m_rings = std::move(realRings);
-
     if (m_ringCount == 0)
     {
         m_ringCount = static_cast<uint32_t>(m_rings.size());
@@ -341,6 +339,12 @@ std::string
 Constellation::GetConstellationName() const
 {
     return m_constellationName;
+}
+
+const std::vector<Ptr<GroundStation>>&
+Constellation::GetGroundStations() const
+{
+    return m_groundStations;
 }
 
 std::optional<uint32_t>
@@ -622,6 +626,27 @@ Constellation::ExportIslAsDot(const std::vector<Ptr<SatelliteLink>>& links, bool
             << std::fixed << std::setprecision(2) << x << "," << y << "!\", "
             << "style=filled, fillcolor=" << color << ", tooltip=\"lat="
             << gt.latitude << " lon=" << gt.longitude << " alt=" << gt.altitude << "m\"];\n";
+    }
+
+    // Add ground station nodes as fixed-position geographic anchors.
+    for (const auto& groundStation : m_groundStations)
+    {
+        if (!groundStation)
+        {
+            continue;
+        }
+
+        const std::string& stationName = groundStation->GetName();
+        double x = groundStation->GetLongitude();
+        double y = groundStation->GetLatitude();
+        constexpr double scale = 3.0;
+        x *= scale;
+        y *= scale;
+
+        dot << "  \"GS:" << stationName << "\" [label=\"" << stationName << "\", pos=\""
+            << std::fixed << std::setprecision(2) << x << "," << y << "!\", "
+            << "shape=box, style=filled, fillcolor=khaki, tooltip=\"type=ground-station lat="
+            << groundStation->GetLatitude() << " lon=" << groundStation->GetLongitude() << "\"] ;\n";
     }
 
     // Add ISL edges with distance labels

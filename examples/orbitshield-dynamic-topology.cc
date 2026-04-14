@@ -41,7 +41,7 @@ int
 main(int argc, char* argv[])
 {
     // Parse command line arguments
-    std::string ringFile = "contrib/orbitshield/data/iridium-20260312.rings";
+    std::string ringFile = "contrib/orbitshield/data/iridium-20260312.yaml";
     double maxRange = 7500000.0; // 7500 km
     Time refreshInterval = Seconds(10); // 10 seconds
     int timeSteps = 60; // iterations
