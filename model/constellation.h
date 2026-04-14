@@ -91,6 +91,30 @@ class Constellation : public Object
     const std::vector<Ptr<Satellite>>& GetPreviousRingSatellites(uint32_t ringId) const;
     const std::vector<Ptr<Satellite>>& GetNextRingSatellites(uint32_t ringId) const;
 
+    /**
+     * \brief Get the cached ISL topology at the current time.
+     * \return Vector of ISL links (updated when topology is refreshed)
+     */
+    const std::vector<Ptr<SatelliteLink>>& GetCurrentIsls() const;
+
+    /**
+     * \brief Set the interval at which ISL topology is automatically refreshed.
+     * \param interval Time between topology refreshes (default: 10 seconds)
+     */
+    void SetIslRefreshInterval(Time interval);
+
+    /**
+     * \brief Get the configured ISL refresh interval.
+     * \return Current refresh interval
+     */
+    Time GetIslRefreshInterval() const;
+
+    /**
+     * \brief Force an immediate refresh of the ISL topology.
+     * Updates the cached ISL list based on current satellite positions.
+     */
+    void RefreshIslTopology();
+
   private:
     std::vector<Ptr<Satellite>> m_satellites; //!< Collection of satellites in the constellation
     perturb::JulianDate m_simulationStartJD;  //!< Global simulation start time
@@ -101,11 +125,18 @@ class Constellation : public Object
     std::string m_constellationName;
     std::string m_tleFile; //!< Path to TLE file referenced in ring file
 
+    // Time-aware ISL topology management (driven by ns-3 Simulator via scheduled events)
+    EventId m_refreshEvent;                   //!< Pending topology refresh event
+    Time m_islRefreshInterval{Seconds(10)};   //!< Interval between refreshes
+    std::vector<Ptr<SatelliteLink>> m_currentIsls; //!< Cached ISL topology
+    double m_maxRange{0.0};                    //!< Max range for ISL creation (cached)
+
     // Helper methods for ISL creation
     double CalculateSatelliteDistance(Ptr<Satellite> satA, Ptr<Satellite> satB);
     Ptr<Satellite> FindClosestSatellite(Ptr<Satellite> reference, const std::vector<Ptr<Satellite>>& candidates);
     Ptr<SatelliteNetDevice> GetOrCreateSatelliteNetDevice(Ptr<Satellite> satellite);
     bool CreateIslLink(Ptr<Satellite> satA, Ptr<Satellite> satB, double maxRange);
+    void ScheduleTopologyRefresh(); //!< Schedule next automatic topology refresh
 };
 
 }  // namespace ns3

@@ -7,7 +7,10 @@
 #include "ns3/test.h"
 
 #include <cstdio>
+#include <cmath>
 #include <fstream>
+#include <set>
+#include <sstream>
 
 using namespace ns3;
 
@@ -32,6 +35,7 @@ ConstellationTestCase::DoRun()
     TestSimple();
     TestIslFallbackWithoutRings();
     TestIridium();
+    TestIslRefreshHonorsRange();
 }
 
 void
@@ -146,4 +150,92 @@ ConstellationTestCase::TestIridium()
     }
 
 
+}
+
+void
+ConstellationTestCase::TestIslRefreshHonorsRange()
+{
+    Simulator::Destroy();
+
+    Ptr<Constellation> constellation = CreateObject<Constellation>();
+    constellation->LoadFromRingFile("contrib/orbitshield/data/iridium-20260312.rings");
+
+    const double maxRange = 3000000.0; // 3000 km
+    const Time step = Seconds(60);
+    const uint32_t steps = 180; // 3 hours
+
+    // SetIslRefreshInterval must be called before CreateIslLinks so that
+    // the first topology-refresh event is scheduled with the right interval.
+    constellation->SetIslRefreshInterval(step);
+
+    // Seed cached range used by refresh logic; also schedules the first refresh event.
+    auto initialLinks = constellation->CreateIslLinks(maxRange);
+    NS_TEST_ASSERT_MSG_GT(initialLinks.size(), 0u, "Expected non-empty initial ISL topology for iridium dataset");
+
+    bool sawTopologyChange = false;
+    bool sawRangeViolation = false;
+    std::set<std::string> previousTopology;
+
+    for (uint32_t i = 0; i < steps; ++i)
+    {
+        // Advance the simulator one step; the constellation refreshes topology automatically.
+        Simulator::Stop(step);
+        Simulator::Run();
+
+        Time now = Simulator::Now();
+        const auto& links = constellation->GetCurrentIsls();
+
+        std::set<std::string> currentTopology;
+
+        for (const auto& link : links)
+        {
+            NS_TEST_ASSERT_MSG_NE(link, nullptr, "ISL list must not contain null links");
+
+            auto dev0 = DynamicCast<SatelliteNetDevice>(link->GetDevice(0));
+            auto dev1 = DynamicCast<SatelliteNetDevice>(link->GetDevice(1));
+            NS_TEST_ASSERT_MSG_NE(dev0, nullptr, "Link endpoint 0 must be a SatelliteNetDevice");
+            NS_TEST_ASSERT_MSG_NE(dev1, nullptr, "Link endpoint 1 must be a SatelliteNetDevice");
+
+            auto sat0 = DynamicCast<Satellite>(dev0->GetNode());
+            auto sat1 = DynamicCast<Satellite>(dev1->GetNode());
+            NS_TEST_ASSERT_MSG_NE(sat0, nullptr, "Link endpoint 0 node must be a Satellite");
+            NS_TEST_ASSERT_MSG_NE(sat1, nullptr, "Link endpoint 1 node must be a Satellite");
+
+            const std::string name0 = sat0->GetName();
+            const std::string name1 = sat1->GetName();
+            const std::string key = (name0 < name1) ? (name0 + "|" + name1) : (name1 + "|" + name0);
+            currentTopology.insert(key);
+
+            Vector3D p0 = sat0->GetPosition(now);
+            Vector3D p1 = sat1->GetPosition(now);
+            const double dx = p0.x - p1.x;
+            const double dy = p0.y - p1.y;
+            const double dz = p0.z - p1.z;
+            const double distance = std::sqrt(dx * dx + dy * dy + dz * dz);
+
+            if (distance > maxRange)
+            {
+                sawRangeViolation = true;
+                std::ostringstream oss;
+                oss << "ISL pair " << key << " violates maxRange at t=" << now.GetSeconds()
+                    << "s: distance=" << distance << " m, maxRange=" << maxRange << " m";
+                NS_TEST_EXPECT_MSG_EQ(false, true, oss.str());
+            }
+        }
+
+        if (i > 0 && currentTopology != previousTopology)
+        {
+            sawTopologyChange = true;
+        }
+        previousTopology = std::move(currentTopology);
+    }
+
+    NS_TEST_EXPECT_MSG_EQ(sawRangeViolation,
+                          false,
+                          "Refreshed ISL topology must keep all links within maxRange at each step");
+    NS_TEST_EXPECT_MSG_EQ(sawTopologyChange,
+                          true,
+                          "Topology should change over time when refresh is enabled");
+
+    Simulator::Destroy();
 }

@@ -60,3 +60,13 @@ build_exec(
   STANDALONE
 )
 
+build_exec(
+  EXECNAME orbitshield-dynamic-topology
+  SOURCE_FILES
+    examples/orbitshield-dynamic-topology.cc
+  LIBRARIES_TO_LINK ${liborbitshield}
+  EXECUTABLE_DIRECTORY_PATH
+        ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/orbitshield/
+  INSTALL_DIRECTORY_PATH ${CMAKE_INSTALL_LIBEXECDIR}/orbitshield
+)
+

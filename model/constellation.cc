@@ -10,6 +10,7 @@
 #include "orbitshield-utils.h"
 
 #include "ns3/log.h"
+#include "ns3/simulator.h"
 
 #include <fstream>
 #include <string>
@@ -379,6 +380,12 @@ Constellation::CreateIslLinks(double maxRange)
 {
     NS_LOG_FUNCTION(this << maxRange);
 
+    // Cache maxRange for use in RefreshIslTopology
+    if (m_maxRange == 0.0)
+    {
+        m_maxRange = maxRange;
+    }
+
     std::vector<Ptr<SatelliteLink>> links;
 
     // Build potential connection candidates for each satellite
@@ -528,6 +535,10 @@ Constellation::CreateIslLinks(double maxRange)
     }
 
     NS_LOG_INFO("Created " << links.size() << " ISL links based on ring topology");
+
+    // Schedule automatic topology refresh driven by the ns-3 Simulator.
+    ScheduleTopologyRefresh();
+
     return links;
 }
 
@@ -659,8 +670,9 @@ Constellation::ExportIslAsDot(const std::vector<Ptr<SatelliteLink>>& links, bool
 double
 Constellation::CalculateSatelliteDistance(Ptr<Satellite> satA, Ptr<Satellite> satB)
 {
-    Vector3D posA = satA->GetPosition();
-    Vector3D posB = satB->GetPosition();
+    // Evaluate link feasibility at current simulator time.
+    Vector3D posA = satA->GetPosition(Simulator::Now());
+    Vector3D posB = satB->GetPosition(Simulator::Now());
 
     double dx = posA.x - posB.x;
     double dy = posA.y - posB.y;
@@ -753,6 +765,56 @@ Constellation::CreateIslLink(Ptr<Satellite> satA, Ptr<Satellite> satB, double ma
     Ptr<SatelliteNetDevice> devA = GetOrCreateSatelliteNetDevice(satA);
     Ptr<SatelliteNetDevice> devB = GetOrCreateSatelliteNetDevice(satB);
     return devA && devB;
+}
+
+const std::vector<Ptr<SatelliteLink>>&
+Constellation::GetCurrentIsls() const
+{
+    return m_currentIsls;
+}
+
+void
+Constellation::SetIslRefreshInterval(Time interval)
+{
+    NS_LOG_FUNCTION(this << interval);
+    NS_ASSERT_MSG(interval.GetSeconds() > 0, "ISL refresh interval must be positive");
+    m_islRefreshInterval = interval;
+    if (m_refreshEvent.IsPending())
+    {
+        ScheduleTopologyRefresh();
+    }
+}
+
+Time
+Constellation::GetIslRefreshInterval() const
+{
+    return m_islRefreshInterval;
+}
+
+void
+Constellation::RefreshIslTopology()
+{
+    NS_LOG_FUNCTION(this);
+    // Clear and regenerate ISL topology; CreateIslLinks will reschedule the next refresh.
+    m_currentIsls.clear();
+    m_currentIsls = CreateIslLinks(m_maxRange);
+
+    NS_LOG_INFO("Refreshed ISL topology at time " << Simulator::Now().GetSeconds()
+                                                   << "s, created " << m_currentIsls.size()
+                                                   << " links");
+}
+
+void
+Constellation::ScheduleTopologyRefresh()
+{
+    NS_LOG_FUNCTION(this);
+    m_refreshEvent.Cancel();
+    if (m_maxRange > 0.0)
+    {
+        m_refreshEvent = Simulator::Schedule(m_islRefreshInterval,
+                                             &Constellation::RefreshIslTopology,
+                                             this);
+    }
 }
 
 }  // namespace ns3

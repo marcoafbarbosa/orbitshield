@@ -24,6 +24,7 @@ class ConstellationTestCase : public TestCase
     void TestSimple();
     void TestIslFallbackWithoutRings();
     void TestIridium();
+    void TestIslRefreshHonorsRange();
 };
 
 #endif /* TEST_CONSTELLATION_H */
