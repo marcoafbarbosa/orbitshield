@@ -86,6 +86,7 @@ class Constellation : public Object
     void LoadFromRingFile(std::istream& file, const std::string& basePath = "");
 
     uint32_t GetRingCount() const;
+    std::string GetConstellationName() const;
     std::optional<uint32_t> GetRingOfSatellite(const std::string& satName) const;
     const std::vector<Ptr<Satellite>>& GetSatellitesInRing(uint32_t ringId) const;
     const std::vector<Ptr<Satellite>>& GetPreviousRingSatellites(uint32_t ringId) const;

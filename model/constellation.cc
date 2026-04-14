@@ -337,6 +337,12 @@ Constellation::GetRingCount() const
     return m_ringCount;
 }
 
+std::string
+Constellation::GetConstellationName() const
+{
+    return m_constellationName;
+}
+
 std::optional<uint32_t>
 Constellation::GetRingOfSatellite(const std::string& satName) const
 {
