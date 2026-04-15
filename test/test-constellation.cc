@@ -3,6 +3,8 @@
  */
 
 #include "test-constellation.h"
+#include "ns3/constant-position-mobility-model.h"
+#include "ns3/geographic-positions.h"
 #include "ns3/orbitshield-module.h"
 #include "ns3/test.h"
 
@@ -35,7 +37,48 @@ ConstellationTestCase::DoRun()
     TestSimple();
     TestIslFallbackWithoutRings();
     TestIridium();
+    TestGroundDistanceOverheadEqualsAltitude();
     TestIslRefreshHonorsRange();
+    TestGroundStationEcefPositionAfterDistanceCalc();
+    TestSatelliteMobilityModelReturnsEcefFrame();
+    TestGroundDistanceUsesConsistentCoordinateFrame();
+}
+
+void
+ConstellationTestCase::TestGroundDistanceOverheadEqualsAltitude()
+{
+    Ptr<Constellation> constellation = CreateObject<Constellation>();
+
+    // Satellite directly overhead the ground station at the same lat/lon.
+    const double latitude = 12.3;
+    const double longitude = -45.6;
+    const double altitude = 700000.0; // 700 km
+
+    Ptr<GroundStation> station = CreateObject<GroundStation>();
+    station->SetName("GS-Overhead");
+    station->SetLatitude(latitude);
+    station->SetLongitude(longitude);
+
+    std::string tle1 = "1 25544U 98067A   22071.78032407  .00021395  00000-0  39008-3 0  9996";
+    std::string tle2 = "2 25544  51.6424  94.0370 0004047 256.5103  89.8846 15.49386383330227";
+    perturb::JulianDate simulationStart(perturb::DateTime(2026, 1, 1, 0, 0, 0));
+    Ptr<Satellite> satellite = CreateObject<Satellite>("SAT-Overhead", tle1, tle2, simulationStart);
+
+    // Override satellite mobility to enforce exact overhead geometry for this test.
+    Ptr<ConstantPositionMobilityModel> satMob = CreateObject<ConstantPositionMobilityModel>();
+    const Vector satEcef = GeographicPositions::GeographicToCartesianCoordinates(
+        latitude,
+        longitude,
+        altitude,
+        GeographicPositions::EarthSpheroidType::WGS84);
+    satMob->SetPosition(satEcef);
+    satellite->AggregateObject(satMob);
+
+    const double distance = constellation->CalculateSatelliteGroundDistance(satellite, station);
+    NS_TEST_EXPECT_MSG_EQ_TOL(distance,
+                              altitude,
+                              1e-3,
+                              "Satellite directly overhead a ground station should have distance equal to altitude");
 }
 
 void
@@ -115,10 +158,22 @@ ConstellationTestCase::TestSimple()
                               "Ground station longitude should match YAML data");
 
     std::vector<Ptr<SatelliteLink>> links = constellation->CreateIslLinks(2000000.0);
+    std::vector<Ptr<SatelliteLink>> groundLinks = constellation->CreateGroundLinks(50000000.0);
+    links.insert(links.end(), groundLinks.begin(), groundLinks.end());
+
+    NS_TEST_EXPECT_MSG_EQ(groundLinks.size(),
+                          2u,
+                          "Expected one ground link per satellite within large max range");
+
     std::string dot = constellation->ExportIslAsDot(links, true);
     NS_TEST_EXPECT_MSG_NE(dot.find("\"GS:Test Ground Station\""),
                           std::string::npos,
                           "DOT output should include a node for the ground station");
+    bool hasGsEdge = (dot.find("\"SAT-1\" -- \"GS:Test Ground Station\"") != std::string::npos) ||
+                     (dot.find("\"GS:Test Ground Station\" -- \"SAT-1\"") != std::string::npos);
+    NS_TEST_EXPECT_MSG_EQ(hasGsEdge,
+                          true,
+                          "DOT output should include at least one satellite-ground edge");
 
     std::remove(ringFilename);
     std::remove(filename);
@@ -270,4 +325,163 @@ ConstellationTestCase::TestIslRefreshHonorsRange()
                           "Topology should change over time when refresh is enabled");
 
     Simulator::Destroy();
+}
+
+void
+ConstellationTestCase::TestGroundStationEcefPositionAfterDistanceCalc()
+{
+    // After calling CalculateSatelliteGroundDistance, the ground station should have a
+    // ConstantPositionMobilityModel aggregated to it, with its position set to the correct
+    // WGS84 ECEF coordinates.
+    //
+    // At lat=0, lon=0 the ECEF position is (WGS84_equatorial_radius, 0, 0).
+
+    Ptr<Constellation> constellation = CreateObject<Constellation>();
+
+    Ptr<GroundStation> station = CreateObject<GroundStation>();
+    station->SetName("GS-Equator");
+    station->SetLatitude(0.0);
+    station->SetLongitude(0.0);
+
+    // Use a ConstantPositionMobilityModel for the satellite so this test does not depend
+    // on coordinate-frame handling of SatelliteMobilityModel.
+    std::string tle1 = "1 25544U 98067A   22071.78032407  .00021395  00000-0  39008-3 0  9996";
+    std::string tle2 = "2 25544  51.6424  94.0370 0004047 256.5103  89.8846 15.49386383330227";
+    perturb::JulianDate simulationStart(perturb::DateTime(2026, 1, 1, 0, 0, 0));
+    Ptr<Satellite> satellite = CreateObject<Satellite>("SAT-EcefTest", tle1, tle2, simulationStart);
+
+    Ptr<ConstantPositionMobilityModel> satMob = CreateObject<ConstantPositionMobilityModel>();
+    satMob->SetPosition(Vector(7000000.0, 0.0, 0.0));
+    satellite->AggregateObject(satMob);
+
+    // Trigger distance computation, which attaches the ground station's mobility model
+    constellation->CalculateSatelliteGroundDistance(satellite, station);
+
+    // The ground station must have a MobilityModel now
+    Ptr<MobilityModel> gsMob = station->GetObject<MobilityModel>();
+    NS_TEST_ASSERT_MSG_NE(gsMob, nullptr,
+        "Ground station should have a MobilityModel after CalculateSatelliteGroundDistance");
+
+    Vector gsPos = gsMob->GetPosition();
+
+    // WGS84 equatorial semi-major axis (meters)
+    const double a = 6378137.0;
+    NS_TEST_EXPECT_MSG_EQ_TOL(gsPos.x, a, 1.0,
+        "Ground station ECEF x should equal WGS84 equatorial radius at lat=0, lon=0");
+    NS_TEST_EXPECT_MSG_EQ_TOL(gsPos.y, 0.0, 1.0,
+        "Ground station ECEF y should be 0 at lon=0");
+    NS_TEST_EXPECT_MSG_EQ_TOL(gsPos.z, 0.0, 1.0,
+        "Ground station ECEF z should be 0 at lat=0");
+}
+
+void
+ConstellationTestCase::TestSatelliteMobilityModelReturnsEcefFrame()
+{
+    // SatelliteMobilityModel::GetPosition() is documented to delegate directly to
+    // Satellite::GetPosition(Simulator::Now()), which now returns ECEF coordinates.
+    //
+    // This test verifies two properties without calling GetGroundTrackPosition:
+    //   1. The MobilityModel position equals satellite->GetPosition(Simulator::Now()).
+    //   2. The returned position has a plausible LEO orbital radius.
+    //
+    // Also verify that ECEF position converts to and from geodetic coordinates
+    // consistently at the current simulation time.
+
+    std::string tle1 = "1 25544U 98067A   22071.78032407  .00021395  00000-0  39008-3 0  9996";
+    std::string tle2 = "2 25544  51.6424  94.0370 0004047 256.5103  89.8846 15.49386383330227";
+    // Use the TLE epoch as simulation start so SGP4 propagation at t=0 gives the epoch state.
+    // IMPORTANT: from_tle() mutates its string arguments in-place (sgp4::twoline2rv inserts
+    // decimal points, replaces spaces).  Use separate copies for the epoch lookup so the
+    // Satellite constructor receives the original, unmutated strings.
+    std::string tle1_epoch_copy = tle1;
+    std::string tle2_epoch_copy = tle2;
+    perturb::JulianDate simulationStart = perturb::Satellite::from_tle(tle1_epoch_copy, tle2_epoch_copy).epoch();
+    Ptr<Satellite> satellite = CreateObject<Satellite>("SAT-FrameTest", tle1, tle2, simulationStart);
+
+    Ptr<SatelliteMobilityModel> satMob = CreateObject<SatelliteMobilityModel>();
+    satMob->SetSatellite(satellite);
+    satellite->AggregateObject(satMob);
+
+    // Both calls must produce identical vectors.
+    Vector mobilityPos = satMob->GetPosition();
+    Vector directPos = satellite->GetPosition(Simulator::Now());
+
+    NS_TEST_EXPECT_MSG_EQ_TOL(mobilityPos.x, directPos.x, 1.0,
+        "SatelliteMobilityModel x must equal Satellite::GetPosition x");
+    NS_TEST_EXPECT_MSG_EQ_TOL(mobilityPos.y, directPos.y, 1.0,
+        "SatelliteMobilityModel y must equal Satellite::GetPosition y");
+    NS_TEST_EXPECT_MSG_EQ_TOL(mobilityPos.z, directPos.z, 1.0,
+        "SatelliteMobilityModel z must equal Satellite::GetPosition z");
+
+    // Orbital radius must be in the plausible LEO range (6500-8000 km).
+    double orbitalRadius = std::sqrt(mobilityPos.x * mobilityPos.x
+                                     + mobilityPos.y * mobilityPos.y
+                                     + mobilityPos.z * mobilityPos.z);
+    NS_TEST_EXPECT_MSG_GT(orbitalRadius, 6500000.0,
+        "Satellite orbital radius should be > 6500 km (above Earth surface)");
+    NS_TEST_EXPECT_MSG_LT(orbitalRadius, 8000000.0,
+        "Satellite orbital radius should be < 8000 km for ISS-like LEO orbit");
+
+    Satellite::GroundTrackPosition gt = satellite->GetGroundTrackPosition(Seconds(0));
+    Vector reconstructedEcef = GeographicPositions::GeographicToCartesianCoordinates(
+        gt.latitude,
+        gt.longitude,
+        gt.altitude,
+        GeographicPositions::EarthSpheroidType::WGS84);
+
+    double ecefDiff = std::sqrt((reconstructedEcef.x - directPos.x) * (reconstructedEcef.x - directPos.x) +
+                                (reconstructedEcef.y - directPos.y) * (reconstructedEcef.y - directPos.y) +
+                                (reconstructedEcef.z - directPos.z) * (reconstructedEcef.z - directPos.z));
+    NS_TEST_EXPECT_MSG_LT(ecefDiff,
+                          10.0,
+                          "GetPosition() should be ECEF and consistent with ground-track conversion");
+}
+
+void
+ConstellationTestCase::TestGroundDistanceUsesConsistentCoordinateFrame()
+{
+    // With Satellite::GetPosition() now returning ECEF, the production path in
+    // CalculateSatelliteGroundDistance() should be frame-consistent.
+    //
+    // For a station placed at the satellite's sub-point (same lat/lon, altitude 0),
+    // distance must match satellite altitude and match manual ECEF Euclidean distance.
+
+    std::string tle1 = "1 25544U 98067A   22071.78032407  .00021395  00000-0  39008-3 0  9996";
+    std::string tle2 = "2 25544  51.6424  94.0370 0004047 256.5103  89.8846 15.49386383330227";
+    std::string tle1_epoch = tle1;
+    std::string tle2_epoch = tle2;
+    perturb::JulianDate simStart = perturb::Satellite::from_tle(tle1_epoch, tle2_epoch).epoch();
+
+    std::string tle1_sat = tle1;
+    std::string tle2_sat = tle2;
+    Ptr<Satellite> satellite = CreateObject<Satellite>("SAT-FrameConsistent", tle1_sat, tle2_sat, simStart);
+
+    Satellite::GroundTrackPosition gt = satellite->GetGroundTrackPosition(Seconds(0));
+
+    Ptr<GroundStation> station = CreateObject<GroundStation>();
+    station->SetName("GS-SubPoint");
+    station->SetLatitude(gt.latitude);
+    station->SetLongitude(gt.longitude);
+
+    Ptr<Constellation> constellation = CreateObject<Constellation>();
+    double modelDistance = constellation->CalculateSatelliteGroundDistance(satellite, station);
+
+    Vector satEcef = satellite->GetPosition(Seconds(0));
+    Vector gsEcef = GeographicPositions::GeographicToCartesianCoordinates(
+        gt.latitude,
+        gt.longitude,
+        0.0,
+        GeographicPositions::EarthSpheroidType::WGS84);
+    double manualDistance = std::sqrt((satEcef.x - gsEcef.x) * (satEcef.x - gsEcef.x) +
+                                      (satEcef.y - gsEcef.y) * (satEcef.y - gsEcef.y) +
+                                      (satEcef.z - gsEcef.z) * (satEcef.z - gsEcef.z));
+
+    NS_TEST_EXPECT_MSG_EQ_TOL(modelDistance,
+                              manualDistance,
+                              1e-3,
+                              "Model distance should match manual ECEF distance computation");
+    NS_TEST_EXPECT_MSG_EQ_TOL(modelDistance,
+                              gt.altitude,
+                              gt.altitude * 0.02,
+                              "Distance to sub-point ground station should match satellite altitude");
 }

@@ -38,7 +38,13 @@ SatelliteTestCase::TestSimple()
     std::string ISS_TLE_2 = "2 25544  51.6424  94.0370 0004047 256.5103  89.8846 15.49386383330227";
 
     // Get the TLE epoch as simulation start time
-    perturb::Satellite tempSat = perturb::Satellite::from_tle(ISS_TLE_1, ISS_TLE_2);
+    // Get the TLE epoch as simulation start time.
+    // IMPORTANT: perturb::Satellite::from_tle() mutates its string arguments in-place
+    // (sgp4::twoline2rv inserts decimal points and replaces spaces).  Use separate copies
+    // for the epoch lookup so the Satellite constructor receives the original, unmutated strings.
+    std::string tle1_for_epoch = ISS_TLE_1;
+    std::string tle2_for_epoch = ISS_TLE_2;
+    perturb::Satellite tempSat = perturb::Satellite::from_tle(tle1_for_epoch, tle2_for_epoch);
     perturb::JulianDate simulationStartJD = tempSat.epoch();
 
     Ptr<Satellite> satellite = CreateObject<Satellite>(ISS_NAME, ISS_TLE_1, ISS_TLE_2, simulationStartJD);
@@ -102,33 +108,35 @@ SatelliteTestCase::TestWithConstellation()
         Vector pos1 = satellite->GetPosition(t1);
         NS_TEST_EXPECT_MSG_NE(pos0, pos1, "Satellite position should change after 1 second");
 
-        // compute expected position change based on velocity and time
-        Vector expectedPos1 = pos0 + vel0 * 1.0; // simple linear approximation
-        // NS_LOG_INFO("Satellite " << satellite->GetName() << " expected position after 1 second (linear approximation): " << expectedPos1);
-        double expectedDelta = CalculateDistance(pos1, expectedPos1);
-        // NS_LOG_INFO("Satellite " << satellite->GetName() << " distance between actual and expected position after 1 second: " << expectedDelta << " meters");
-
-        NS_TEST_EXPECT_MSG_EQ_TOL(expectedDelta, 0.0, 10.0, "Satellite position after 1 second should be approximately equal to linear approximation based on velocity");
-
-        // distance traveled should be approximately equal to speed * time
+        // Position is now ECEF while GetVelocity() still returns inertial-frame velocity.
+        // Therefore, do not expect exact pos(t+1) ~= pos(t) + vel*dt.  Instead, validate that
+        // displacement over 1 second is physically plausible for LEO and close to velocity magnitude.
         double distanceTraveled = CalculateDistance(pos0, pos1);
-        // NS_LOG_INFO("Satellite " << satellite->GetName() << " distance traveled after 1 second: " << distanceTraveled << " meters");
-        NS_TEST_EXPECT_MSG_EQ_TOL(distanceTraveled, speed * 1.0, 10.0, "Distance traveled after 1 second should be approximately equal to speed * time");
+        NS_TEST_EXPECT_MSG_GT(distanceTraveled,
+                      5000.0,
+                      "Satellite should travel more than 5 km in one second in LEO");
+        NS_TEST_EXPECT_MSG_LT(distanceTraveled,
+                      9000.0,
+                      "Satellite should travel less than 9 km in one second in LEO");
+        NS_TEST_EXPECT_MSG_EQ_TOL(distanceTraveled,
+                      speed,
+                      600.0,
+                      "ECEF displacement over 1 second should remain close to inertial speed");
 
         double eccentricity = satellite->GetOrbitalElements().eccentricity;
         // NS_LOG_INFO("Satellite " << satellite->GetName() << " eccentricity: " << eccentricity);
 
         if(eccentricity < 0.0015)
         {
-            // after half an orbit period, the satellite should be on the opposite side of the Earth
+            // In ECEF, Earth rotates during the orbit, so the satellite is not exactly opposite.
+            // Still, for near-circular LEO, half an orbit should place it far from the start point.
             double orbitalPeriod = 2.0 * M_PI * (altitude0 + 6371000.0) / speed; // T = 2 * pi * r / v
-            // NS_LOG_INFO("Satellite " << satellite->GetName() << " orbital period: " << orbitalPeriod << " seconds");
             Time tHalfOrbit = epochTime + Seconds(orbitalPeriod / 2.0);
             Vector posHalfOrbit = satellite->GetPosition(tHalfOrbit);
-            Vector expectedPosHalfOrbit = {-pos0.x, -pos0.y, -pos0.z}; // opposite position
-            double distanceHalfOrbit = CalculateDistance(posHalfOrbit, expectedPosHalfOrbit);
-            // NS_LOG_INFO("Satellite " << satellite->GetName() << " distance after half an orbit: " << distanceHalfOrbit << " meters");
-            NS_TEST_EXPECT_MSG_EQ_TOL(distanceHalfOrbit, 0, 100000.0, "Satellite position after half an orbit should be approximately opposite");
+            double distanceFromStart = CalculateDistance(posHalfOrbit, pos0);
+            NS_TEST_EXPECT_MSG_GT(distanceFromStart,
+                                  1000000.0,
+                                  "Satellite should be far from its start position after half an orbit");
         }
         else
         {

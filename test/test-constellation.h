@@ -24,7 +24,11 @@ class ConstellationTestCase : public TestCase
     void TestSimple();
     void TestIslFallbackWithoutRings();
     void TestIridium();
+    void TestGroundDistanceOverheadEqualsAltitude();
     void TestIslRefreshHonorsRange();
+    void TestGroundStationEcefPositionAfterDistanceCalc();
+    void TestSatelliteMobilityModelReturnsEcefFrame();
+    void TestGroundDistanceUsesConsistentCoordinateFrame();
 };
 
 #endif /* TEST_CONSTELLATION_H */
