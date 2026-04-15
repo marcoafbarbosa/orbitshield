@@ -49,12 +49,14 @@ main(int argc, char* argv[])
 {
     std::string ringFile = "contrib/orbitshield/data/iridium-20260312.yaml";
     std::string outputFile;
-    double maxRangeKm = 5000.0;   // 5000 km default for LEO at ~700 km altitude
+    double islMaxRangeKm = 5000.0;   // 5000 km default for LEO at ~700 km altitude
+    double groundMaxRangeKm = 3000.0; // 3000 km default for satellite-ground visibility in LEO
     double simTimeSec = 0.0;
 
     CommandLine cmd(__FILE__);
     cmd.AddValue("ringFile", "Path to constellation ring file", ringFile);
-    cmd.AddValue("maxRange", "Maximum ISL range in kilometers", maxRangeKm);
+    cmd.AddValue("islMaxRange", "Maximum ISL range in kilometers", islMaxRangeKm);
+    cmd.AddValue("groundMaxRange", "Maximum ground link range in kilometers", groundMaxRangeKm);
     cmd.AddValue("simTime", "Simulation time in seconds used to compute positions/links", simTimeSec);
     cmd.AddValue("outputFile", "Optional path to write Graphviz DOT output", outputFile);
     cmd.Parse(argc, argv);
@@ -65,14 +67,15 @@ main(int argc, char* argv[])
         return 1;
     }
 
-    if (maxRangeKm <= 0.0)
+    if (islMaxRangeKm <= 0.0)
     {
-        std::cerr << "Error: maxRange must be positive\n";
+        std::cerr << "Error: islMaxRange must be positive\n";
         return 1;
     }
 
     // Convert from km to meters
-    double maxRangeMeters = maxRangeKm * 1000.0;
+    double islMaxRangeMeters = islMaxRangeKm * 1000.0;
+    double groundMaxRangeMeters = groundMaxRangeKm * 1000.0;
 
     if (simTimeSec < 0.0)
     {
@@ -109,8 +112,10 @@ main(int argc, char* argv[])
             Simulator::Run();
         }
 
-        // Create ISL links
-        std::vector<Ptr<ns3::SatelliteLink>> links = constellation->CreateIslLinks(maxRangeMeters);
+        // Create both ISL and satellite-ground links for topology visualization.
+        std::vector<Ptr<ns3::SatelliteLink>> links = constellation->CreateIslLinks(islMaxRangeMeters);
+        std::vector<Ptr<ns3::SatelliteLink>> groundLinks = constellation->CreateGroundLinks(groundMaxRangeMeters);
+        links.insert(links.end(), groundLinks.begin(), groundLinks.end());
 
         // Export as DOT format
         std::string dotOutput = constellation->ExportIslAsDot(links, true);

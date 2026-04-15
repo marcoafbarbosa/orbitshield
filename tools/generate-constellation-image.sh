@@ -11,7 +11,8 @@
 #
 # Options:
 #   --ringFile=<path>     Path to the .rings file   (default: contrib/orbitshield/data/iridium-20260312.yaml)
-#   --maxRange=<km>       Maximum ISL range in km   (default: 5000)
+#   --islMaxRange=<km>    Maximum ISL range in km   (default: 5000)
+#   --groundMaxRange=<km> Maximum satellite-ground range in km (default: 3000)
 #   --outputFile=<path>   DOT output file            (default: out.dot)
 #   --pngFile=<path>      PNG output file            (default: derived from --outputFile, e.g. out.png)
 #   --frames=<int>        Number of frames to render (default: 1)
@@ -37,7 +38,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ── defaults ────────────────────────────────────────────────────────────────
 RING_FILE="contrib/orbitshield/data/iridium-20260312.yaml"
-MAX_RANGE="3000"  # km (3000 km is typical for LEO at ~700 km altitude)
+ISL_MAX_RANGE="5000"  # km (5000 km default for ISL at LEO ~700 km altitude)
+GROUND_MAX_RANGE="3000"  # km (3000 km typical for satellite-ground visibility in LEO)
 DOT_FILE="out.dot"
 PNG_FILE=""
 FRAMES="1"
@@ -57,7 +59,8 @@ USE_WORLDMAP=1   # 1 = worldmap renderer; 0 = plain graphviz
 for arg in "$@"; do
     case "$arg" in
         --ringFile=*)    RING_FILE="${arg#*=}" ;;
-        --maxRange=*)    MAX_RANGE="${arg#*=}" ;;
+        --islMaxRange=*)    ISL_MAX_RANGE="${arg#*=}" ;;
+        --groundMaxRange=*) GROUND_MAX_RANGE="${arg#*=}" ;;
         --outputFile=*)  DOT_FILE="${arg#*=}" ;;
         --pngFile=*)     PNG_FILE="${arg#*=}" ;;
         --frames=*)      FRAMES="${arg#*=}" ;;
@@ -208,7 +211,8 @@ _build_gif() {
 # ── generate frames ─────────────────────────────────────────────────────────
 echo "Generating ISL frames..."
 echo "  ringFile   : $RING_FILE"
-echo "  maxRange   : $MAX_RANGE km"
+echo "  islMaxRange   : $ISL_MAX_RANGE km"
+echo "  groundMaxRange: $GROUND_MAX_RANGE km"
 echo "  frames     : $FRAMES"
 echo "  startTime  : $START_TIME s"
 echo "  timeStep   : $TIME_STEP s"
@@ -232,7 +236,8 @@ for ((i = 0; i < FRAMES; ++i)); do
 
     ./ns3 run orbitshield-isl-visualizer -- \
         --ringFile="$RING_FILE" \
-        --maxRange="$MAX_RANGE" \
+        --islMaxRange="$ISL_MAX_RANGE" \
+        --groundMaxRange="$GROUND_MAX_RANGE" \
         --simTime="$FRAME_TIME" \
         --outputFile="$FRAME_DOT"
 

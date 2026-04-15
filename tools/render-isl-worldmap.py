@@ -221,8 +221,12 @@ def render(dot_path: str, out_path: str, width: float, height: float, dpi: int, 
         print("Error: no plottable nodes found in DOT file.", file=sys.stderr)
         sys.exit(1)
 
+    # Separate ISL and ground-link edge counts
+    isl_edge_count = sum(1 for a, b, _ in edges if not (a.startswith("GS:") or b.startswith("GS:")))
+    ground_edge_count = sum(1 for a, b, _ in edges if a.startswith("GS:") or b.startswith("GS:"))
+
     print(
-        f"  {len(sat_nodes)} satellites, {len(gs_nodes)} ground stations, {len(edges)} ISL edges",
+        f"  {len(sat_nodes)} satellites, {len(gs_nodes)} ground stations, {isl_edge_count} ISL edges, {ground_edge_count} ground edges",
         file=sys.stderr,
     )
 
@@ -244,17 +248,19 @@ def render(dot_path: str, out_path: str, width: float, height: float, dpi: int, 
     ax.axvline(0, color="#aaaaaa", linewidth=0.5, zorder=1)
     ax.axhline(0, color="#aaaaaa", linewidth=0.5, zorder=1)
 
-    # ISL edges
+    # Draw ISL and satellite-ground edges with different colors.
     all_nodes = {**sat_nodes, **gs_nodes}
     for a, b, label in edges:
         if a not in all_nodes or b not in all_nodes:
             continue
+        is_ground_edge = a.startswith("GS:") or b.startswith("GS:")
+        edge_color = "#2e7d32" if is_ground_edge else "#e05000"
         lon0, lat0 = all_nodes[a]["lon"], all_nodes[a]["lat"]
         lon1, lat1 = all_nodes[b]["lon"], all_nodes[b]["lat"]
         for seg in _segments_antimeridian(lon0, lat0, lon1, lat1):
             lons = [p[0] for p in seg]
             lats = [p[1] for p in seg]
-            ax.plot(lons, lats, color="#e05000", linewidth=0.9, alpha=0.75, zorder=3,
+            ax.plot(lons, lats, color=edge_color, linewidth=0.9, alpha=0.75, zorder=3,
                     solid_capstyle="round")
 
     # Satellite nodes, grouped by ring color for a single scatter call each
