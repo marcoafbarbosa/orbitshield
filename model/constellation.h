@@ -18,6 +18,8 @@
 #include <unordered_map>
 #include <vector>
 
+class ConstellationTestCase;
+
 namespace ns3
 {
 
@@ -32,6 +34,8 @@ class SatelliteNetDevice;
  */
 class Constellation : public Object
 {
+    friend class ::ConstellationTestCase;
+
   public:
     /**
      * \brief Get the type ID.
@@ -75,6 +79,13 @@ class Constellation : public Object
     std::vector<Ptr<SatelliteLink>> CreateIslLinks(double maxRange);
 
     /**
+     * \brief Create satellite-ground links based only on distance.
+     * \param maxRange maximum distance (meters) for active links.
+     * \return vector of created links.
+     */
+    std::vector<Ptr<SatelliteLink>> CreateGroundLinks(double maxRange);
+
+    /**
      * \brief Export ISL topology as a Graphviz DOT format string.
      * \param links Vector of satellite links to export.
      * \param activeOnly If true, only export active links; otherwise export all links.
@@ -99,6 +110,12 @@ class Constellation : public Object
      * \return Vector of ISL links (updated when topology is refreshed)
      */
     const std::vector<Ptr<SatelliteLink>>& GetCurrentIsls() const;
+
+    /**
+     * \brief Get the cached ground-link topology at the current time.
+     * \return Vector of satellite-ground links (updated when topology is refreshed)
+     */
+    const std::vector<Ptr<SatelliteLink>>& GetCurrentGroundLinks() const;
 
     /**
      * \brief Set the interval at which ISL topology is automatically refreshed.
@@ -133,13 +150,18 @@ class Constellation : public Object
     EventId m_refreshEvent;                   //!< Pending topology refresh event
     Time m_islRefreshInterval{Seconds(10)};   //!< Interval between refreshes
     std::vector<Ptr<SatelliteLink>> m_currentIsls; //!< Cached ISL topology
-    double m_maxRange{0.0};                    //!< Max range for ISL creation (cached)
+    std::vector<Ptr<SatelliteLink>> m_currentGroundLinks; //!< Cached satellite-ground topology
+    double m_islMaxRange{0.0};                 //!< Max range for ISL creation (cached)
+    double m_groundMaxRange{0.0};              //!< Max range for ground-link creation (cached)
 
     // Helper methods for ISL creation
     double CalculateSatelliteDistance(Ptr<Satellite> satA, Ptr<Satellite> satB);
+    double CalculateSatelliteGroundDistance(Ptr<Satellite> sat, Ptr<GroundStation> station);
     Ptr<Satellite> FindClosestSatellite(Ptr<Satellite> reference, const std::vector<Ptr<Satellite>>& candidates);
     Ptr<SatelliteNetDevice> GetOrCreateSatelliteNetDevice(Ptr<Satellite> satellite);
+    Ptr<SatelliteNetDevice> GetOrCreateGroundStationNetDevice(Ptr<GroundStation> station);
     bool CreateIslLink(Ptr<Satellite> satA, Ptr<Satellite> satB, double maxRange);
+    bool CreateGroundLink(Ptr<Satellite> sat, Ptr<GroundStation> station, double maxRange);
     void ScheduleTopologyRefresh(); //!< Schedule next automatic topology refresh
 };
 

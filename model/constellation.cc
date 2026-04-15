@@ -9,7 +9,10 @@
 #include "satellite-mobility-model.h"
 #include "orbitshield-utils.h"
 
+#include "ns3/constant-position-mobility-model.h"
+#include "ns3/geographic-positions.h"
 #include "ns3/log.h"
+#include "ns3/mobility-model.h"
 #include "ns3/simulator.h"
 
 #include <yaml-cpp/yaml.h>
@@ -390,11 +393,8 @@ Constellation::CreateIslLinks(double maxRange)
 {
     NS_LOG_FUNCTION(this << maxRange);
 
-    // Cache maxRange for use in RefreshIslTopology
-    if (m_maxRange == 0.0)
-    {
-        m_maxRange = maxRange;
-    }
+    // Cache ISL range for use in periodic refresh.
+    m_islMaxRange = maxRange;
 
     std::vector<Ptr<SatelliteLink>> links;
 
@@ -552,6 +552,51 @@ Constellation::CreateIslLinks(double maxRange)
     return links;
 }
 
+std::vector<Ptr<SatelliteLink>>
+Constellation::CreateGroundLinks(double maxRange)
+{
+    NS_LOG_FUNCTION(this << maxRange);
+
+    // Cache ground-link range for use in periodic refresh.
+    m_groundMaxRange = maxRange;
+
+    std::vector<Ptr<SatelliteLink>> links;
+    for (const auto& station : m_groundStations)
+    {
+        if (!station)
+        {
+            continue;
+        }
+
+        for (const auto& sat : m_satellites)
+        {
+            if (!sat)
+            {
+                continue;
+            }
+
+            if (CreateGroundLink(sat, station, maxRange))
+            {
+                Ptr<SatelliteNetDevice> satDev = GetOrCreateSatelliteNetDevice(sat);
+                Ptr<SatelliteNetDevice> gsDev = GetOrCreateGroundStationNetDevice(station);
+                if (satDev && gsDev)
+                {
+                    Ptr<SatelliteLink> link = CreateObject<SatelliteLink>(satDev, gsDev);
+                    link->SetMaxRange(maxRange);
+                    link->SetPropagationDelayModel(CreateObject<IslPropagationDelayModel>());
+                    links.push_back(link);
+                }
+            }
+        }
+    }
+
+    NS_LOG_INFO("Created " << links.size() << " satellite-ground links");
+
+    ScheduleTopologyRefresh();
+
+    return links;
+}
+
 std::string
 Constellation::ExportIslAsDot(const std::vector<Ptr<SatelliteLink>>& links, bool activeOnly) const
 {
@@ -667,21 +712,33 @@ Constellation::ExportIslAsDot(const std::vector<Ptr<SatelliteLink>>& links, bool
         if (!nodeA || !nodeB)
             continue;
 
-        Ptr<Satellite> satA = DynamicCast<Satellite>(nodeA);
-        Ptr<Satellite> satB = DynamicCast<Satellite>(nodeB);
+        auto nodeLabel = [](const Ptr<Node>& node) {
+            if (!node)
+            {
+                return std::string("Unknown");
+            }
+            if (Ptr<Satellite> sat = DynamicCast<Satellite>(node))
+            {
+                return sat->GetName();
+            }
+            if (Ptr<GroundStation> station = DynamicCast<GroundStation>(node))
+            {
+                return std::string("GS:") + station->GetName();
+            }
+            return std::string("Node-") + std::to_string(node->GetId());
+        };
 
-        if (!satA || !satB)
-            continue;
-
-        std::string nameA = satA->GetName();
-        std::string nameB = satB->GetName();
+        std::string nameA = nodeLabel(nodeA);
+        std::string nameB = nodeLabel(nodeB);
 
         // Calculate distance
-        Vector3D posA = satA->GetPosition();
-        Vector3D posB = satB->GetPosition();
-        double distance = std::sqrt(std::pow(posA.x - posB.x, 2) +
-                                    std::pow(posA.y - posB.y, 2) +
-                                    std::pow(posA.z - posB.z, 2));
+        Ptr<MobilityModel> mobA = nodeA->GetObject<MobilityModel>();
+        Ptr<MobilityModel> mobB = nodeB->GetObject<MobilityModel>();
+        if (!mobA || !mobB)
+        {
+            continue;
+        }
+        double distance = mobA->GetDistanceFrom(mobB);
         double distanceKm = distance / 1000.0;
 
         // Format distance label
@@ -710,6 +767,41 @@ Constellation::CalculateSatelliteDistance(Ptr<Satellite> satA, Ptr<Satellite> sa
     double dz = posA.z - posB.z;
 
     return std::sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+double
+Constellation::CalculateSatelliteGroundDistance(Ptr<Satellite> sat, Ptr<GroundStation> station)
+{
+    if (!sat || !station)
+    {
+        return std::numeric_limits<double>::max();
+    }
+
+    Ptr<MobilityModel> satMob = sat->GetObject<MobilityModel>();
+    if (!satMob)
+    {
+        Ptr<SatelliteMobilityModel> satModel = CreateObject<SatelliteMobilityModel>();
+        satModel->SetSatellite(sat);
+        sat->AggregateObject(satModel);
+        satMob = satModel;
+    }
+
+    Ptr<MobilityModel> stationMob = station->GetObject<MobilityModel>();
+    Ptr<ConstantPositionMobilityModel> fixed = DynamicCast<ConstantPositionMobilityModel>(stationMob);
+    if (!fixed)
+    {
+        fixed = CreateObject<ConstantPositionMobilityModel>();
+        station->AggregateObject(fixed);
+    }
+
+    const Vector ecef = GeographicPositions::GeographicToCartesianCoordinates(
+        station->GetLatitude(),
+        station->GetLongitude(),
+        0.0,
+        GeographicPositions::EarthSpheroidType::WGS84);
+    fixed->SetPosition(ecef);
+
+    return satMob->GetDistanceFrom(fixed);
 }
 
 Ptr<Satellite>
@@ -762,6 +854,29 @@ Constellation::GetOrCreateSatelliteNetDevice(Ptr<Satellite> satellite)
     return device;
 }
 
+Ptr<SatelliteNetDevice>
+Constellation::GetOrCreateGroundStationNetDevice(Ptr<GroundStation> station)
+{
+    if (!station)
+    {
+        return nullptr;
+    }
+
+    for (uint32_t i = 0; i < station->GetNDevices(); ++i)
+    {
+        Ptr<SatelliteNetDevice> device = DynamicCast<SatelliteNetDevice>(station->GetDevice(i));
+        if (device)
+        {
+            return device;
+        }
+    }
+
+    Ptr<SatelliteNetDevice> device = CreateObject<SatelliteNetDevice>();
+    station->AddDevice(device);
+    device->SetNode(station);
+    return device;
+}
+
 bool
 Constellation::CreateIslLink(Ptr<Satellite> satA, Ptr<Satellite> satB, double maxRange)
 {
@@ -798,10 +913,35 @@ Constellation::CreateIslLink(Ptr<Satellite> satA, Ptr<Satellite> satB, double ma
     return devA && devB;
 }
 
+bool
+Constellation::CreateGroundLink(Ptr<Satellite> sat, Ptr<GroundStation> station, double maxRange)
+{
+    if (!sat || !station)
+    {
+        return false;
+    }
+
+    double distance = CalculateSatelliteGroundDistance(sat, station);
+    if (distance > maxRange)
+    {
+        return false;
+    }
+
+    Ptr<SatelliteNetDevice> satDev = GetOrCreateSatelliteNetDevice(sat);
+    Ptr<SatelliteNetDevice> gsDev = GetOrCreateGroundStationNetDevice(station);
+    return satDev && gsDev;
+}
+
 const std::vector<Ptr<SatelliteLink>>&
 Constellation::GetCurrentIsls() const
 {
     return m_currentIsls;
+}
+
+const std::vector<Ptr<SatelliteLink>>&
+Constellation::GetCurrentGroundLinks() const
+{
+    return m_currentGroundLinks;
 }
 
 void
@@ -826,13 +966,23 @@ void
 Constellation::RefreshIslTopology()
 {
     NS_LOG_FUNCTION(this);
-    // Clear and regenerate ISL topology; CreateIslLinks will reschedule the next refresh.
+    // Clear and regenerate dynamic topologies; link creation will reschedule the next refresh.
     m_currentIsls.clear();
-    m_currentIsls = CreateIslLinks(m_maxRange);
+    m_currentGroundLinks.clear();
+
+    if (m_islMaxRange > 0.0)
+    {
+        m_currentIsls = CreateIslLinks(m_islMaxRange);
+    }
+    if (m_groundMaxRange > 0.0)
+    {
+        m_currentGroundLinks = CreateGroundLinks(m_groundMaxRange);
+    }
 
     NS_LOG_INFO("Refreshed ISL topology at time " << Simulator::Now().GetSeconds()
                                                    << "s, created " << m_currentIsls.size()
-                                                   << " links");
+                                                   << " ISLs and " << m_currentGroundLinks.size()
+                                                   << " ground links");
 }
 
 void
@@ -840,7 +990,7 @@ Constellation::ScheduleTopologyRefresh()
 {
     NS_LOG_FUNCTION(this);
     m_refreshEvent.Cancel();
-    if (m_maxRange > 0.0)
+    if (m_islMaxRange > 0.0 || m_groundMaxRange > 0.0)
     {
         m_refreshEvent = Simulator::Schedule(m_islRefreshInterval,
                                              &Constellation::RefreshIslTopology,
