@@ -16,7 +16,7 @@
 
 using namespace ns3;
 
-NS_LOG_COMPONENT_DEFINE("OrbitShieldLoadFromRingExample");
+NS_LOG_COMPONENT_DEFINE("OrbitShieldLoadFromYamlExample");
 
 /**
  * \brief Main function demonstrating loading multiple satellites from a YAML constellation description file
@@ -24,7 +24,7 @@ NS_LOG_COMPONENT_DEFINE("OrbitShieldLoadFromRingExample");
 int
 main(int argc, char* argv[])
 {
-    LogComponentEnable("OrbitShieldLoadFromRingExample", LOG_LEVEL_INFO);
+    LogComponentEnable("OrbitShieldLoadFromYamlExample", LOG_LEVEL_INFO);
 
     NS_LOG_INFO("Loading satellites from Iridium constellation description file using Constellation...");
 

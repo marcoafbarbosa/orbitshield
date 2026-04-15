@@ -1,5 +1,8 @@
 # OrbitShield Module
 
+[![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](../../LICENSE)
+[![ns-3 Compatible](https://img.shields.io/badge/ns--3-dev-informational)](../../README.md)
+
 ## Overview
 
 OrbitShield is an ns-3 module to simulate satellite constellations, inter-satellite links (ISLs), and satellite-ground connectivity for LEO-style systems.
@@ -12,6 +15,76 @@ The module provides:
 - Distance-based ISL and satellite-ground link construction
 - Time-aware topology refresh
 - DOT export and visualization tooling
+
+## Table of Contents
+
+- [OrbitShield Module](#orbitshield-module)
+  - [Overview](#overview)
+  - [Table of Contents](#table-of-contents)
+  - [Quick Start](#quick-start)
+  - [Architecture](#architecture)
+  - [Current Implementation](#current-implementation)
+    - [Models and Core Components](#models-and-core-components)
+    - [Tests](#tests)
+    - [Examples](#examples)
+    - [Tools](#tools)
+  - [Module Structure](#module-structure)
+  - [Dependencies](#dependencies)
+  - [Prerequisites](#prerequisites)
+  - [Compatibility](#compatibility)
+  - [Building](#building)
+  - [Basic Usage](#basic-usage)
+    - [Create One Satellite from TLE](#create-one-satellite-from-tle)
+    - [Create Constellation from TLE File](#create-constellation-from-tle-file)
+    - [Create Constellation from YAML Ring File](#create-constellation-from-yaml-ring-file)
+    - [Build Links](#build-links)
+    - [Dynamic Refresh](#dynamic-refresh)
+  - [Ring Metadata Format (YAML)](#ring-metadata-format-yaml)
+  - [Visualization Tooling](#visualization-tooling)
+    - [ISL Visualizer (`orbitshield-isl-visualizer`)](#isl-visualizer-orbitshield-isl-visualizer)
+    - [Render DOT on World Map](#render-dot-on-world-map)
+    - [Generate Frames / GIF](#generate-frames--gif)
+    - [Example Generated Visualization](#example-generated-visualization)
+  - [Running Examples](#running-examples)
+  - [API Reference](#api-reference)
+  - [Testing](#testing)
+  - [Coordinate System Notes](#coordinate-system-notes)
+  - [Future Enhancements](#future-enhancements)
+  - [Contributing](#contributing)
+  - [Citation and Attribution](#citation-and-attribution)
+  - [Release Notes](#release-notes)
+  - [License](#license)
+  - [Authors](#authors)
+
+## Quick Start
+
+From the ns-3 root:
+
+```bash
+./ns3 build
+./ns3 run orbitshield-load-from-yaml
+
+./ns3 run orbitshield-isl-visualizer -- \
+  --ringFile=contrib/orbitshield/data/iridium-20260312.yaml \
+  --islMaxRange=5000 \
+  --groundMaxRange=3000 \
+  --simTime=600 \
+  --outputFile=out.dot
+
+./contrib/orbitshield/tools/generate-constellation-image.sh --frames=10 --timeStep=60 --gifFile=iridium.gif --gifFps=10
+```
+
+## Architecture
+
+```mermaid
+flowchart LR
+    TLE[TLE Catalog] --> SAT[Satellite Model]
+    YAML[YAML Ring Metadata] --> CONST[Constellation Model]
+    SAT --> CONST
+    CONST --> ISL[ISL and Ground Link Builder]
+    ISL --> DOT[DOT Topology Export]
+    DOT --> MAP[World Map Renderer]
+```
 
 ## Current Implementation
 
@@ -60,7 +133,7 @@ Coverage includes:
 ### Examples
 - `orbitshield-basic-example`
 - `orbitshield-load-from-tle`
-- `orbitshield-load-from-ring`
+- `orbitshield-load-from-yaml`
 - `orbitshield-dynamic-topology`
 
 ### Tools
@@ -98,7 +171,7 @@ contrib/orbitshield/
 |- examples/
 |  |- orbitshield-basic-example.cc
 |  |- orbitshield-load-from-tle.cc
-|  |- orbitshield-load-from-ring.cc
+|  |- orbitshield-load-from-yaml.cc
 |  |- orbitshield-dynamic-topology.cc
 |- tools/
 |  |- isl-visualizer.cc
@@ -113,11 +186,31 @@ contrib/orbitshield/
 
 ## Dependencies
 
-- `perturb` (SGP4 wrapper):
-  - https://github.com/gunvirranu/perturb
-- `yaml-cpp` for YAML constellation metadata parsing
+- `perturb` (SGP4 wrapper), fetched automatically by CMake (`FetchContent`)
+- `yaml-cpp` for YAML constellation metadata parsing, fetched automatically by CMake (`FetchContent`)
 - ns-3 modules linked by orbitshield:
   - `core`, `network`, `mobility`, `propagation`, `buildings`
+
+## Prerequisites
+
+- A working ns-3 build environment (compiler, CMake, Python)
+- `graphviz` (`dot`) for DOT rendering
+- Python 3 with `matplotlib` for world-map rendering
+
+`yaml-cpp` and `perturb` are fetched automatically by CMake during configure/build.
+
+Example install (Ubuntu/Debian):
+
+```bash
+sudo apt-get update
+sudo apt-get install -y graphviz python3-matplotlib
+```
+
+## Compatibility
+
+- Targeted for the ns-3 development tree in this repository.
+- Designed for Linux-based development environments.
+- If using a different ns-3 branch or toolchain, validate with a full build and test run.
 
 ## Building
 
@@ -277,6 +370,18 @@ python3 contrib/orbitshield/tools/render-isl-worldmap.py out.dot out.png
   --gifFile=orbitshield.gif
 ```
 
+### Example Generated Visualization
+
+The animation below is an example generated visualization for the Iridium dataset.
+
+Input files used for this constellation:
+- YAML metadata: [contrib/orbitshield/data/iridium-20260312.yaml](data/iridium-20260312.yaml)
+- TLEs: [contrib/orbitshield/data/iridium-20260312.txt](data/iridium-20260312.txt)
+
+![OrbitShield Iridium Constellation Visualization](docs/media/iridium-20260312.gif)
+
+Open the full GIF directly: [docs/media/iridium-20260312.gif](docs/media/iridium-20260312.gif)
+
 ## Running Examples
 
 ```bash
@@ -285,89 +390,25 @@ python3 contrib/orbitshield/tools/render-isl-worldmap.py out.dot out.png
 
 ./ns3 run orbitshield-basic-example
 ./ns3 run orbitshield-load-from-tle
-./ns3 run orbitshield-load-from-ring
+./ns3 run orbitshield-load-from-yaml
 ./ns3 run orbitshield-dynamic-topology
 ```
 
-## API Snapshot
+## API Reference
 
-### `Satellite`
+Key headers:
+- [`model/satellite.h`](model/satellite.h)
+- [`model/constellation.h`](model/constellation.h)
+- [`model/ground-station.h`](model/ground-station.h)
+- [`model/satellite-link.h`](model/satellite-link.h)
+- [`model/satellite-net-device.h`](model/satellite-net-device.h)
+- [`model/satellite-mobility-model.h`](model/satellite-mobility-model.h)
 
-```cpp
-class Satellite : public Node
-{
-public:
-    static TypeId GetTypeId();
-
-    Satellite(const std::string& name,
-              std::string& tle1,
-              std::string& tle2,
-              perturb::JulianDate simulationStartJD);
-    ~Satellite() override;
-
-    std::string GetName() const;
-
-    // ECEF position (meters)
-    Vector3D GetPosition(Time at) const;
-    Vector3D GetPosition();
-
-    // ECI/TEME velocity (m/s)
-    Vector3D GetVelocity(Time at) const;
-
-    Time GetTleEpochAsNs3Time() const;
-    perturb::JulianDate GetTleEpochAsJulianDate() const;
-    perturb::JulianDate GetSimulationStartJD() const;
-
-    struct GroundTrackPosition
-    {
-        double latitude;
-        double longitude;
-        double altitude;
-    };
-
-    GroundTrackPosition GetGroundTrackPosition(Time at) const;
-    GroundTrackPosition GetGroundTrackPosition() const;
-};
-```
-
-### `Constellation`
-
-```cpp
-class Constellation : public Object
-{
-public:
-    static TypeId GetTypeId();
-
-    void LoadFromTleFile(const std::string& filename);
-    void LoadFromTleFile(std::istream& file);
-
-    void LoadFromRingFile(const std::string& filename);
-    void LoadFromRingFile(std::istream& file, const std::string& basePath = "");
-
-    const std::vector<Ptr<Satellite>>& GetSatellites() const;
-    const std::vector<Ptr<GroundStation>>& GetGroundStations() const;
-
-    std::vector<Ptr<SatelliteLink>> CreateIslLinks(double maxRangeMeters);
-    std::vector<Ptr<SatelliteLink>> CreateGroundLinks(double maxRangeMeters);
-
-    const std::vector<Ptr<SatelliteLink>>& GetCurrentIsls() const;
-    const std::vector<Ptr<SatelliteLink>>& GetCurrentGroundLinks() const;
-
-    void SetIslRefreshInterval(Time interval);
-    Time GetIslRefreshInterval() const;
-    void RefreshIslTopology();
-
-    uint32_t GetRingCount() const;
-    std::string GetConstellationName() const;
-    std::optional<uint32_t> GetRingOfSatellite(const std::string& satName) const;
-    const std::vector<Ptr<Satellite>>& GetSatellitesInRing(uint32_t ringId) const;
-    const std::vector<Ptr<Satellite>>& GetPreviousRingSatellites(uint32_t ringId) const;
-    const std::vector<Ptr<Satellite>>& GetNextRingSatellites(uint32_t ringId) const;
-
-    std::string ExportIslAsDot(const std::vector<Ptr<SatelliteLink>>& links,
-                               bool activeOnly = true) const;
-};
-```
+Common entry points:
+- `Satellite::GetPosition(...)` and `Satellite::GetVelocity(...)`
+- `Constellation::LoadFromTleFile(...)` and `Constellation::LoadFromRingFile(...)`
+- `Constellation::CreateIslLinks(...)` and `Constellation::CreateGroundLinks(...)`
+- `Constellation::ExportIslAsDot(...)`
 
 ## Testing
 
@@ -401,6 +442,15 @@ Contributions are welcome. Please:
 2. Add/extend tests for behavior changes.
 3. Update this README when API/tool behavior changes.
 4. Validate with `./ns3 build` and `test-runner --suite=orbitshield`.
+
+## Citation and Attribution
+
+If OrbitShield contributes to published work, cite ns-3 and reference this module repository path.
+
+## Release Notes
+
+- OrbitShield module evolution is tracked in commit history and repository release artifacts.
+- ns-3 project-wide changes are available at [../../CHANGES.md](../../CHANGES.md).
 
 ## License
 

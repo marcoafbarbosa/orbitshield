@@ -11,7 +11,7 @@ build_lib_example(
 )
 
 build_lib_example(
-  NAME orbitshield-load-from-ring
-  SOURCE_FILES orbitshield-load-from-ring.cc
+  NAME orbitshield-load-from-yaml
+  SOURCE_FILES orbitshield-load-from-yaml.cc
   LIBRARIES_TO_LINK ${liborbitshield}
 )
