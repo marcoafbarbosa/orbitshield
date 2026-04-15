@@ -18,6 +18,60 @@ NS_LOG_COMPONENT_DEFINE("Satellite");
 
 NS_OBJECT_ENSURE_REGISTERED(Satellite);
 
+namespace
+{
+// Normalize angle to [0, 360)
+double
+NormalizeDegrees(double angle)
+{
+    double normalized = fmod(angle, 360.0);
+    if (normalized < 0.0)
+    {
+        normalized += 360.0;
+    }
+    return normalized;
+}
+
+// Compute Greenwich Mean Sidereal Time (degrees) from Julian date.
+// Source: https://aa.usno.navy.mil/faq/JD_formula
+// (approximation for UTC/UT1, good for visualization purposes)
+double
+JulianDateToGmstDegrees(const perturb::JulianDate& jd)
+{
+    // Julian date as decimal days
+    double julianDay = jd.jd + jd.jd_frac;
+
+    // Number of days since J2000.0
+    double d = julianDay - 2451545.0;
+    double d0 = floor(julianDay + 0.5) - 0.5 - 2451545.0; // at 0h UT
+    double t = d / 36525.0;
+
+    double gmstHours = 6.697374558 + 0.06570982441908 * d0 +
+                       1.00273790935 * ((julianDay - floor(julianDay + 0.5) + 0.5) * 24.0) +
+                       0.000026 * t * t;
+    double gmstDeg = NormalizeDegrees(gmstHours * 15.0);
+    return gmstDeg;
+}
+
+// Convert ECI (approx TEME) coordinates to ECEF via GMST rotation.
+Vector3D
+EciToEcef(const Vector3D& eci, const perturb::JulianDate& jd)
+{
+    double gmstDeg = JulianDateToGmstDegrees(jd);
+    double gmstRad = DegreesToRadians(gmstDeg);
+
+    double cosTheta = cos(gmstRad);
+    double sinTheta = sin(gmstRad);
+
+    double x = cosTheta * eci.x + sinTheta * eci.y;
+    double y = -sinTheta * eci.x + cosTheta * eci.y;
+    double z = eci.z;
+
+    return Vector3D(x, y, z);
+}
+
+} // anonymous namespace
+
 TypeId
 Satellite::GetTypeId()
 {
@@ -74,8 +128,11 @@ Satellite::GetPosition(Time at) const
         NS_LOG_ERROR("Error propagating satellite position for " << at.GetSeconds() << "s : " << (int)e);
         return Vector3D(0.0, 0.0, 0.0);
     }
-    // convert from km to meters
-    return Vector3D(sv.position[0] * 1000.0, sv.position[1] * 1000.0, sv.position[2] * 1000.0);
+    // Perturb returns TEME/ECI in km; convert to meters first.
+    const Vector3D eciPosition(sv.position[0] * 1000.0, sv.position[1] * 1000.0, sv.position[2] * 1000.0);
+
+    // Return ECEF because ns-3 mobility and distance calculations are Earth-fixed.
+    return EciToEcef(eciPosition, realJD);
 }
 
 Vector3D
@@ -138,70 +195,13 @@ perturb::JulianDate Satellite::GetSimulationStartJD() const
     return m_simulationStartJD;
 }
 
-namespace
-{
-// Normalize angle to [0, 360)
-double
-NormalizeDegrees(double angle)
-{
-    double normalized = fmod(angle, 360.0);
-    if (normalized < 0.0)
-    {
-        normalized += 360.0;
-    }
-    return normalized;
-}
-
-// Compute Greenwich Mean Sidereal Time (degrees) from Julian date.
-// Source: https://aa.usno.navy.mil/faq/JD_formula
-// (approximation for UTC/UT1, good for visualization purposes)
-double
-JulianDateToGmstDegrees(const perturb::JulianDate &jd)
-{
-    // Julian date as decimal days
-    double julianDay = jd.jd + jd.jd_frac;
-
-    // Number of days since J2000.0
-    double d = julianDay - 2451545.0;
-    double d0 = floor(julianDay + 0.5) - 0.5 - 2451545.0; // at 0h UT
-    double t = d / 36525.0;
-
-    double gmstHours = 6.697374558 + 0.06570982441908 * d0 + 1.00273790935 * ((julianDay - floor(julianDay + 0.5) + 0.5) * 24.0) + 0.000026 * t * t;
-    double gmstDeg = NormalizeDegrees(gmstHours * 15.0);
-    return gmstDeg;
-}
-
-// Convert ECI (approx TEME) coordinates to ECEF via GMST rotation.
-Vector3D
-EciToEcef(const Vector3D &eci, const perturb::JulianDate &jd)
-{
-    double gmstDeg = JulianDateToGmstDegrees(jd);
-    double gmstRad = DegreesToRadians(gmstDeg);
-
-    double cosTheta = cos(gmstRad);
-    double sinTheta = sin(gmstRad);
-
-    double x = cosTheta * eci.x + sinTheta * eci.y;
-    double y = -sinTheta * eci.x + cosTheta * eci.y;
-    double z = eci.z;
-
-    return Vector3D(x, y, z);
-}
-
-} // anonymous namespace
-
 Satellite::GroundTrackPosition
 Satellite::GetGroundTrackPosition(Time at) const
 {
     NS_LOG_FUNCTION(this << at);
 
-    Vector3D eciPosition = GetPosition(at); // meters
-
-    // Build Julian date for this moment in time
-    perturb::JulianDate currentJD = m_simulationStartJD + (at.GetSeconds() / 86400.0);
-
-    // Convert ECI -> ECEF
-    Vector3D ecefPosition = EciToEcef(eciPosition, currentJD);
+    // GetPosition() already returns ECEF coordinates.
+    Vector3D ecefPosition = GetPosition(at);
 
     // Convert to geodetic coordinates in WGS84
     Vector geo = GeographicPositions::CartesianToGeographicCoordinates(Vector(ecefPosition.x, ecefPosition.y, ecefPosition.z), GeographicPositions::WGS84);

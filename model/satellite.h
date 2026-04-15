@@ -47,7 +47,7 @@ class Satellite : public Node
     std::string GetName() const;
 
     /**
-     * \brief Get the satellite's position in ECI coordinates at a given time
+     * \brief Get the satellite's position in ECEF coordinates at a given time
      * \param at the simulation time
      * \return the position as a Vector3D in meters
      */
@@ -61,7 +61,7 @@ class Satellite : public Node
     Vector3D GetVelocity(Time at) const;
 
     /**
-     * \brief Get the satellite's position in ECI at the current simulation time
+     * \brief Get the satellite's position in ECEF at the current simulation time
      * \return the position as a Vector3D in meters
      */
     Vector3D GetPosition();
