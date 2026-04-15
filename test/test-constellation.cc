@@ -105,7 +105,7 @@ ConstellationTestCase::TestSimple()
     NS_TEST_EXPECT_MSG_EQ(sats[0]->GetName(), std::string("SAT-1"), "First satellite name should match");
     NS_TEST_EXPECT_MSG_EQ(sats[1]->GetName(), std::string("SAT-2"), "Second satellite name should match");
 
-    const char* ringFilename = "constellation-test.rings";
+    const char* ringFilename = "constellation-test.yaml";
     {
         std::ofstream ringFile(ringFilename);
         ringFile << "constellationName: TestConstellation\n";

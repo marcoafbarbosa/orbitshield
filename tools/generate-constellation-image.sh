@@ -10,7 +10,7 @@
 #   ./contrib/orbitshield/tools/generate-constellation-image.sh [OPTIONS]
 #
 # Options:
-#   --ringFile=<path>     Path to the .rings file   (default: contrib/orbitshield/data/iridium-20260312.yaml)
+#   --ringFile=<path>     Path to the YAML metadata file   (default: contrib/orbitshield/data/iridium-20260312.yaml)
 #   --islMaxRange=<km>    Maximum ISL range in km   (default: 5000)
 #   --groundMaxRange=<km> Maximum satellite-ground range in km (default: 3000)
 #   --outputFile=<path>   DOT output file            (default: out.dot)
