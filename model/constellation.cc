@@ -575,6 +575,13 @@ Constellation::CreateGroundLinks(double maxRange)
                 continue;
             }
 
+            // When ring metadata is loaded, skip satellites not assigned to any ring.
+            if (!m_satelliteRingMap.empty() &&
+                m_satelliteRingMap.find(sat->GetName()) == m_satelliteRingMap.end())
+            {
+                continue;
+            }
+
             if (CreateGroundLink(sat, station, maxRange))
             {
                 Ptr<SatelliteNetDevice> satDev = GetOrCreateSatelliteNetDevice(sat);
