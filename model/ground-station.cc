@@ -17,7 +17,7 @@ TypeId
 GroundStation::GetTypeId()
 {
     static TypeId tid = TypeId("ns3::GroundStation")
-                            .SetParent<Object>()
+                            .SetParent<Node>()
                             .AddConstructor<GroundStation>()
                             .SetGroupName("OrbitShield");
     return tid;

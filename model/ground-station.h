@@ -5,14 +5,14 @@
 #ifndef ORBITSHIELD_GROUND_STATION_H
 #define ORBITSHIELD_GROUND_STATION_H
 
-#include "ns3/object.h"
+#include "ns3/node.h"
 
 #include <string>
 
 namespace ns3
 {
 
-class GroundStation : public Object
+class GroundStation : public Node
 {
   public:
     static TypeId GetTypeId();
