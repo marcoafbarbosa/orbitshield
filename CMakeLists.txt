@@ -41,7 +41,7 @@ build_lib(
     model/satellite-mobility-model.h
     model/satellite-net-device.h
     model/satellite.h
-  LIBRARIES_TO_LINK ${libbuildings} ${libcore} ${libnetwork} ${libmobility} ${libpropagation} perturb
+  LIBRARIES_TO_LINK ${libbuildings} ${libcore} ${libnetwork} ${libmobility} ${libpropagation} ${libinternet} ${libapplications} perturb
   TEST_SOURCES
     test/test-constellation.cc
     test/test-isl.cc

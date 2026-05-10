@@ -7,6 +7,8 @@
 
 #include "ns3/callback.h"
 #include "ns3/ptr.h"
+#include "ns3/internet-stack-helper.h"
+#include "ns3/ipv4-address-helper.h"
 
 namespace ns3
 {

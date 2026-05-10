@@ -483,6 +483,29 @@ Milestone 2 implements multi-link support for satellite and ground station nodes
 - `OrbitShieldMultiLinkDeviceTest`: Verifies satellite device can manage multiple concurrent ISL links
 - `OrbitShieldGroundStationMultiLinkTest`: Verifies ground stations can simultaneously link to multiple satellites
 
+- `OrbitShieldGroundStationMultiLinkTest`: Verifies ground stations can maintain multiple satellite-ground links
+
+## IPv4 Stack and Network Routing (Milestone 3)
+
+### Current Status
+
+Milestone 3 implements IPv4 stack integration and network layer routing foundation:
+
+- **Phase 3.1** (COMPLETED): Internet stack installation and IPv4 addressing
+  - Added `${libinternet}` and `${libapplications}` to module dependencies
+  - `OrbitShieldRoutingHelper::Install()` now fully functional:
+    - Installs ns-3 Internet stack (`InternetStackHelper`) on all satellite and ground station nodes
+    - Enables IPv4 forwarding on satellites via `Ipv4::IpForward` attribute
+    - Assigns unique /30 subnets to each ISL and GSL interface
+    - ISL addresses assigned from 10.x.y.0/30 (x,y range from 0-255)
+    - Ground link addresses assigned from 10.(x+256).y.0/30 to avoid conflicts
+
+### Limitations & Future Work
+
+- **Phase 3.2** (PENDING): End-to-end ping testing requires static routing logic
+  - Requires implementation of `RecomputeRoutes()` to compute paths (deferred to Milestone 4)
+  - Will add ping/echo test from Tempe to Fairbanks ground stations once routing is in place
+
 
 ## Coordinate System Notes
 
