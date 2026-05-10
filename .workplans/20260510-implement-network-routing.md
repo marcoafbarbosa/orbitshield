@@ -274,8 +274,8 @@ Treat this workplan document as the single source of truth. Agent memory is ephe
 
 ## Git Policy
 
-- All OrbitShield development work is done on branch `network-routing`.
-- Verify the branch before starting any implementation: `git -C /home/marco/ns-3-dev branch --show-current` must return `network-routing`.
+- All OrbitShield development work is done on branch `network-routing-implementation`.
+- Verify the branch before starting any implementation: `git -C /home/marco/ns-3-dev branch --show-current` must return `network-routing-implementation`.
 - One commit is made per completed milestone, at the end of the milestone.
 - Commit message format: `milestone X implementation` (e.g., `milestone 1 implementation`).
 - Commits are made only when all milestone phases pass their phase completion gates.
@@ -285,7 +285,7 @@ Treat this workplan document as the single source of truth. Agent memory is ephe
 - Only files under `contrib/orbitshield/` may be staged and committed. Do not stage or modify any files outside this path.
 - Do not amend, rebase, squash, reset, or otherwise alter existing git history.
 - Do not force-push (`--force` or `-f`) under any circumstances.
-- Do not create, switch to, or delete any branch other than using `network-routing` as the working branch.
+- Do not create, switch to, or delete any branch other than using `network-routing-implementation` as the working branch.
 - Do not push to any remote without explicit human instruction.
 - Before committing, verify staged files with `git diff --name-only --cached` and confirm all are within `contrib/orbitshield/`.
 
