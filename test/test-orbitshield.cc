@@ -30,6 +30,7 @@ OrbitShieldTestSuite::OrbitShieldTestSuite()
     AddTestCase(new OrbitShieldRoutingHelperTest(), TestCase::Duration::QUICK);
     AddTestCase(new OrbitShieldMultiLinkDeviceTest(), TestCase::Duration::QUICK);
     AddTestCase(new OrbitShieldGroundStationMultiLinkTest(), TestCase::Duration::QUICK);
+    AddTestCase(new OrbitShieldIpv4AddressAssignmentTest(), TestCase::Duration::QUICK);
 }
 
 static OrbitShieldTestSuite g_orbitShieldTestSuite;

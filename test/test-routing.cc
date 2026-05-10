@@ -5,6 +5,11 @@
 #include "test-routing.h"
 #include "ns3/orbitshield-module.h"
 #include "ns3/test.h"
+#include "ns3/ipv4.h"
+#include "ns3/simulator.h"
+
+#include <algorithm>
+#include <vector>
 
 using namespace ns3;
 
@@ -260,5 +265,114 @@ OrbitShieldGroundStationMultiLinkTest::DoRun()
     NS_TEST_EXPECT_MSG_EQ(sat2Links.size(), 1u, "Satellite 2 should have 1 ground link");
 
     NS_LOG_INFO("Ground station multi-link test completed successfully");
+}
+
+OrbitShieldIpv4AddressAssignmentTest::OrbitShieldIpv4AddressAssignmentTest()
+    : TestCase("Test sequential subnet IPv4 address assignment by OrbitShieldRoutingHelper Install")
+{
+}
+
+OrbitShieldIpv4AddressAssignmentTest::~OrbitShieldIpv4AddressAssignmentTest()
+{
+}
+
+void
+OrbitShieldIpv4AddressAssignmentTest::DoRun()
+{
+    // Load the Iridium constellation
+    Ptr<Constellation> constellation = CreateObject<Constellation>();
+    constellation->LoadFromRingFile("contrib/orbitshield/data/iridium-20260312.yaml");
+
+    // Set ranges: CreateIslLinks/CreateGroundLinks store m_islMaxRange / m_groundMaxRange
+    // as a side effect, which RefreshIslTopology uses to build m_currentIsls / m_currentGroundLinks.
+    constellation->CreateIslLinks(2000000.0);    // 2000 km ISL range
+    constellation->CreateGroundLinks(50000000.0); // 50 000 km GSL range
+    constellation->RefreshIslTopology();          // populates GetCurrentIsls / GetCurrentGroundLinks
+
+    const auto& isls = constellation->GetCurrentIsls();
+    const auto& gsls = constellation->GetCurrentGroundLinks();
+
+    if (isls.empty() && gsls.empty())
+    {
+        NS_LOG_WARN("No active links at epoch; skipping sequential /30 address verification");
+        Simulator::Destroy();
+        return;
+    }
+
+    uint32_t totalLinks = static_cast<uint32_t>(isls.size() + gsls.size());
+    NS_LOG_INFO("Testing sequential /30 allocation for " << isls.size()
+                << " ISL links and " << gsls.size() << " GSL links");
+
+    // Install routing (installs IPv4 stack and assigns sequential /30 addresses)
+    OrbitShieldRoutingHelper routingHelper;
+    routingHelper.Install(constellation);
+
+    // Collect all non-loopback IPv4 addresses from every node.
+    // Each link creates one new interface per endpoint, so K links → K*2 addresses total.
+    std::vector<uint32_t> assignedAddresses;
+
+    auto collectAddresses = [&](Ptr<Node> node) {
+        Ptr<Ipv4> ipv4 = node->GetObject<Ipv4>();
+        if (!ipv4)
+        {
+            return;
+        }
+        // Interface 0 is always the loopback; start from 1.
+        for (uint32_t iface = 1; iface < ipv4->GetNInterfaces(); ++iface)
+        {
+            for (uint32_t addrIdx = 0; addrIdx < ipv4->GetNAddresses(iface); ++addrIdx)
+            {
+                Ipv4InterfaceAddress ifAddr = ipv4->GetAddress(iface, addrIdx);
+                // Verify mask is /30 on every assigned interface
+                NS_TEST_ASSERT_MSG_EQ(ifAddr.GetMask(),
+                                      Ipv4Mask("255.255.255.252"),
+                                      "Every assigned interface must have a /30 mask");
+                assignedAddresses.push_back(ifAddr.GetLocal().Get());
+            }
+        }
+    };
+
+    for (const auto& sat : constellation->GetSatellites())
+    {
+        collectAddresses(sat);
+    }
+    for (const auto& gs : constellation->GetGroundStations())
+    {
+        collectAddresses(gs);
+    }
+
+    // Exactly two addresses per link (one per endpoint)
+    NS_TEST_ASSERT_MSG_EQ(assignedAddresses.size(),
+                          static_cast<std::size_t>(totalLinks) * 2,
+                          "Expected exactly 2 addresses per link");
+
+    // Sort numerically so sequential /30 blocks appear in order
+    std::sort(assignedAddresses.begin(), assignedAddresses.end());
+
+    // Uniqueness: no two (node, interface) pairs share the same address
+    for (std::size_t i = 1; i < assignedAddresses.size(); ++i)
+    {
+        NS_TEST_ASSERT_MSG_NE(assignedAddresses[i],
+                              assignedAddresses[i - 1],
+                              "All assigned IPv4 addresses must be unique");
+    }
+
+    // Sequential /30 blocks: block i occupies [10.0.0.0 + 4*i + 1, 10.0.0.0 + 4*i + 2].
+    // After sorting, pair (2*i, 2*i+1) must correspond to block i.
+    const uint32_t base = 0x0A000000; // 10.0.0.0
+    for (uint32_t i = 0; i < totalLinks; ++i)
+    {
+        uint32_t expectedFirst  = base + 4 * i + 1;
+        uint32_t expectedSecond = base + 4 * i + 2;
+        NS_TEST_ASSERT_MSG_EQ(assignedAddresses[2 * i],
+                              expectedFirst,
+                              "Block " << i << " first address mismatch");
+        NS_TEST_ASSERT_MSG_EQ(assignedAddresses[2 * i + 1],
+                              expectedSecond,
+                              "Block " << i << " second address mismatch");
+    }
+
+    NS_LOG_INFO("Sequential /30 allocation verified: " << totalLinks << " link(s), all blocks correct");
+    Simulator::Destroy();
 }
 

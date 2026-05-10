@@ -68,56 +68,42 @@ OrbitShieldRoutingHelper::Install(Ptr<Constellation> constellation)
         }
     }
 
-    // Assign IPv4 addresses to all links using /30 subnets
-    uint32_t addressCounter = 0;
+    // Assign sequential /30 subnets to all links: ISLs first, then GSLs in creation order.
+    // ns-3's Ipv4AddressHelper only allocates addresses within the single subnet established by
+    // SetBase(); it does NOT auto-advance to the next subnet. We therefore call SetBase() with
+    // the correct block address before each Assign() to obtain strict sequential /30 allocation:
+    //   ISL link 0  → 10.0.0.0/30  → endpoints get 10.0.0.1 / 10.0.0.2
+    //   ISL link 1  → 10.0.0.4/30  → endpoints get 10.0.0.5 / 10.0.0.6
+    //   GSL link 0  → 10.0.0.(4*K)/30 (continues from last ISL block)
+    //   ...
+    static const uint32_t kBaseNet = 0x0A000000; // 10.0.0.0
     Ipv4AddressHelper addressHelper;
-    
-    // Process ISL links
+    uint32_t blockIndex = 0;
+
+    auto assignLinkAddresses = [&](const std::vector<Ptr<SatelliteLink>>& links) {
+        for (const auto& link : links)
+        {
+            Ptr<NetDevice> dev0 = link->GetDevice(0);
+            Ptr<NetDevice> dev1 = link->GetDevice(1);
+            if (dev0 && dev1)
+            {
+                // Set the base to the correct /30 block for this link index so
+                // that NewAddress() always starts from offset 1 within the block.
+                addressHelper.SetBase(Ipv4Address(kBaseNet + blockIndex * 4),
+                                      Ipv4Mask("255.255.255.252"));
+                NetDeviceContainer devices;
+                devices.Add(dev0);
+                devices.Add(dev1);
+                addressHelper.Assign(devices);
+                ++blockIndex;
+            }
+        }
+    };
+
     const auto& isls = constellation->GetCurrentIsls();
-    for (const auto& link : isls)
-    {
-        // Assign /30 subnet starting from 10.0.0.0
-        std::ostringstream oss;
-        oss << "10." << (addressCounter / 256) << "." << (addressCounter % 256) << ".0";
-        addressHelper.SetBase(Ipv4Address(oss.str().c_str()), Ipv4Mask("255.255.255.252"));
-        
-        // Get the two devices on this link
-        Ptr<NetDevice> dev0 = link->GetDevice(0);
-        Ptr<NetDevice> dev1 = link->GetDevice(1);
-        
-        if (dev0 && dev1)
-        {
-            NetDeviceContainer devices;
-            devices.Add(dev0);
-            devices.Add(dev1);
-            addressHelper.Assign(devices);
-            addressCounter += 4;  // Each /30 subnet uses 4 addresses
-        }
-    }
-
-    // Process ground links
     const auto& groundLinks = constellation->GetCurrentGroundLinks();
-    for (const auto& link : groundLinks)
-    {
-        // Assign /30 subnet starting from a higher range
-        uint32_t adjustedCounter = addressCounter + (1u << 16);  // Offset for ground links
-        std::ostringstream oss;
-        oss << "10." << (adjustedCounter / 256) << "." << (adjustedCounter % 256) << ".0";
-        addressHelper.SetBase(Ipv4Address(oss.str().c_str()), Ipv4Mask("255.255.255.252"));
-
-        // Get the two devices on this link
-        Ptr<NetDevice> dev0 = link->GetDevice(0);
-        Ptr<NetDevice> dev1 = link->GetDevice(1);
-        
-        if (dev0 && dev1)
-        {
-            NetDeviceContainer devices;
-            devices.Add(dev0);
-            devices.Add(dev1);
-            addressHelper.Assign(devices);
-            addressCounter += 4;
-        }
-    }
+    assignLinkAddresses(isls);
+    assignLinkAddresses(groundLinks);
 
     NS_LOG_INFO("Installed Internet stack and assigned IPv4 addresses to " << isls.size()
                                                                            << " ISLs and " << groundLinks.size() << " ground links");

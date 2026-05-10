@@ -35,30 +35,48 @@ class OrbitShieldRoutingHelperTest : public TestCase
     void DoRun() override;
 };
 
-  /**
-   * \brief Test case for multi-link SatelliteNetDevice support
-   */
-  class OrbitShieldMultiLinkDeviceTest : public TestCase
-  {
-    public:
-      OrbitShieldMultiLinkDeviceTest();
-      ~OrbitShieldMultiLinkDeviceTest() override;
+/**
+ * \brief Test case for multi-link SatelliteNetDevice support
+ */
+class OrbitShieldMultiLinkDeviceTest : public TestCase
+{
+  public:
+    OrbitShieldMultiLinkDeviceTest();
+    ~OrbitShieldMultiLinkDeviceTest() override;
 
-    private:
-      void DoRun() override;
-  };
+  private:
+    void DoRun() override;
+};
 
-  /**
-   * \brief Test case for ground station multi-link support
-   */
-  class OrbitShieldGroundStationMultiLinkTest : public TestCase
-  {
-    public:
-      OrbitShieldGroundStationMultiLinkTest();
-      ~OrbitShieldGroundStationMultiLinkTest() override;
+/**
+ * \brief Test case for ground station multi-link support
+ */
+class OrbitShieldGroundStationMultiLinkTest : public TestCase
+{
+  public:
+    OrbitShieldGroundStationMultiLinkTest();
+    ~OrbitShieldGroundStationMultiLinkTest() override;
 
-    private:
-      void DoRun() override;
-  };
+  private:
+    void DoRun() override;
+};
+
+/**
+ * \brief Test case for sequential /30 IPv4 address assignment
+ *
+ * Verifies that OrbitShieldRoutingHelper::Install() assigns IPv4 addresses
+ * to all ISL and GSL link interfaces using strictly sequential /30 subnets
+ * starting at 10.0.0.0, with ISLs allocated first and GSLs continuing
+ * from the next block with no gap or offset.
+ */
+class OrbitShieldIpv4AddressAssignmentTest : public TestCase
+{
+  public:
+    OrbitShieldIpv4AddressAssignmentTest();
+    ~OrbitShieldIpv4AddressAssignmentTest() override;
+
+  private:
+    void DoRun() override;
+};
 
 #endif /* TEST_ROUTING_H */

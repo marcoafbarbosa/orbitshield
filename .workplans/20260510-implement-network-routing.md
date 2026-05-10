@@ -52,9 +52,9 @@ Follow the current OrbitShield design and ns-3 coding style:
 
 ## Status Summary
 
-- Milestone 1: API scaffolding and test setup — **Not implemented**
-- Milestone 2: Multi-link node support — **Not implemented**
-- Milestone 3: IPv4 stack and simple ping path — **Not implemented**
+- Milestone 1: API scaffolding and test setup — **Implemented**
+- Milestone 2: Multi-link node support — **Implemented**
+- Milestone 3: IPv4 stack and simple ping path — **In progress** (Phase 3.1 implemented; Phase 3.2 not implemented)
 - Milestone 4: Topology refresh integration — **Not implemented**
 - Milestone 5: Complex routing behavior — **Not implemented**
 - Milestone 6: Cleanup and documentation — **Not implemented**
@@ -63,7 +63,7 @@ Follow the current OrbitShield design and ns-3 coding style:
 
 ### Phase 1.1: Establish test harness and data-driven scenario
 
-- Status: **Not implemented**
+- Status: **Implemented**
 - Goal: Add OrbitShield test cases that use the Iridium YAML dataset.
 - Work:
   - Add test scaffolding to `contrib/orbitshield/test/`.
@@ -72,7 +72,7 @@ Follow the current OrbitShield design and ns-3 coding style:
 
 ### Phase 1.2: Define minimal APIs and placeholder mocks
 
-- Status: **Not implemented**
+- Status: **Implemented**
 - Goal: Define the APIs needed by later routing tests without yet implementing behavior.
 - Work:
   - Create `contrib/orbitshield/model/orbitshield-routing-helper.h` and `.cc` with the following stub public API:
@@ -91,7 +91,7 @@ Follow the current OrbitShield design and ns-3 coding style:
 
 ### Phase 2.1: Refactor `SatelliteNetDevice` for multiple links per node
 
-- Status: **Not implemented**
+- Status: **Implemented**
 - Goal: Allow satellites and ground stations to maintain multiple concurrent `NetworkDevice`/`Channel` pairs.
 - Work:
   - Change the link association model so `SatelliteNetDevice` is not limited to one `SatelliteLink`.
@@ -102,7 +102,7 @@ Follow the current OrbitShield design and ns-3 coding style:
 
 ### Phase 2.2: Ground station multi-link support
 
-- Status: **Not implemented**
+- Status: **Implemented**
 - Goal: Ensure `GroundStation` nodes can host multiple outgoing and incoming satellite links.
 - Work:
   - Mirror the satellite multi-link support on the ground station side.
@@ -114,7 +114,13 @@ Follow the current OrbitShield design and ns-3 coding style:
 
 ### Phase 3.1: Install the standard ns-3 Internet stack
 
-- Status: **Not implemented**
+- Status: **Implemented**
+- Outcome:
+  - `${libinternet}` and `${libapplications}` were already linked in CMakeLists.
+  - `OrbitShieldRoutingHelper::Install()` installs `InternetStackHelper` on all satellite and ground station nodes, enables IPv4 forwarding on satellites, and assigns sequential /30 subnets to all links (ISLs first, then GSLs).
+  - Sequential /30 allocation uses `Ipv4AddressHelper::SetBase()` with the correct block address before each `Assign()` call (block N → `10.0.0.0 + N*4`). This avoids the ns-3 `NewAddress()` overflow assertion that occurs when a single `SetBase()` is shared across multiple links.
+  - Added `OrbitShieldIpv4AddressAssignmentTest` that loads the Iridium constellation, creates ISL and GSL links, calls `Install()`, collects all non-loopback addresses, and verifies sequential /30 block assignment (uniqueness + exact block-index address values).
+  - All 8 test cases in the `orbitshield` suite pass.
 - Goal: Use standard IPv4 interfaces on satellites and ground stations.
 - Work:
   - Add `${libinternet}` and `${libapplications}` to `LIBRARIES_TO_LINK` in `contrib/orbitshield/CMakeLists.txt`. This is a hard prerequisite — the build will fail at link time without it.
