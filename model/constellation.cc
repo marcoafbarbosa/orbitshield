@@ -993,6 +993,13 @@ Constellation::RefreshIslTopology()
 }
 
 void
+Constellation::SetRouteUpdateCallback(Callback<void, Ptr<Constellation>> cb)
+{
+    NS_LOG_FUNCTION(this);
+    m_routeUpdateCallback = cb;
+}
+
+void
 Constellation::ScheduleTopologyRefresh()
 {
     NS_LOG_FUNCTION(this);

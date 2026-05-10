@@ -5,6 +5,7 @@
 #include "test-satellite.h"
 #include "test-constellation.h"
 #include "test-isl.h"
+#include "test-routing.h"
 
 #include "ns3/test.h"
 
@@ -25,6 +26,8 @@ OrbitShieldTestSuite::OrbitShieldTestSuite()
     AddTestCase(new SatelliteTestCase(), TestCase::Duration::QUICK);
     AddTestCase(new ConstellationTestCase(), TestCase::Duration::QUICK);
     AddTestCase(new IslChannelTestCase(), TestCase::Duration::QUICK);
+    AddTestCase(new OrbitShieldIridiumTopologyTest(), TestCase::Duration::QUICK);
+    AddTestCase(new OrbitShieldRoutingHelperTest(), TestCase::Duration::QUICK);
 }
 
 static OrbitShieldTestSuite g_orbitShieldTestSuite;

@@ -419,6 +419,38 @@ Build tests and run suite:
 ./ns3 run "test-runner --suite=orbitshield"
 ```
 
+## Network Routing (Milestone 1 - Scaffolding)
+
+### Current Status
+
+Milestone 1 of the network routing implementation provides scaffolding and test infrastructure for future routing functionality:
+
+- **Phase 1.1**: Iridium constellation topology discovery and test harness are in place. Tests verify that the constellation can be loaded from YAML metadata, ring structure is parsed correctly, and ground stations are discovered.
+- **Phase 1.2**: Basic routing helper API is defined with stub implementations:
+  - `OrbitShieldRoutingHelper` class for managing routing configuration
+  - `Constellation::SetRouteUpdateCallback()` for callback registration
+  - Placeholder `Install()` and `RecomputeRoutes()` methods
+
+### Limitations
+
+The current Milestone 1 implementation is **not functional for real routing**. The routing helper methods are stubs that do nothing. Real IP-level routing will be implemented in subsequent milestones:
+
+- **Milestone 3**: IPv4 stack integration and static route computation for simple ping paths
+- **Milestone 4**: Dynamic route updates in response to topology refresh
+- **Milestone 5**: Advanced multi-ground-station scenarios and routing strategy evaluation
+
+### Test Coverage
+
+New routing tests can be run with:
+
+```bash
+./ns3 run "test-runner --suite=orbitshield --verbose"
+```
+
+Tests include:
+- `OrbitShieldIridiumTopologyTest`: Verifies constellation and ground station loading from YAML
+- `OrbitShieldRoutingHelperTest`: Verifies routing helper API compile and link correctly
+
 ## Coordinate System Notes
 
 - `Satellite::GetPosition(...)` returns **ECEF** coordinates.

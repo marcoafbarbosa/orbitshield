@@ -135,6 +135,15 @@ class Constellation : public Object
      */
     void RefreshIslTopology();
 
+    /**
+     * \brief Set a callback to be invoked when routes should be updated
+     * 
+     * The callback will be called with a pointer to this constellation as the argument.
+     * 
+     * \param cb The callback to invoke on route update events
+     */
+    void SetRouteUpdateCallback(Callback<void, Ptr<Constellation>> cb);
+
   private:
     std::vector<Ptr<Satellite>> m_satellites; //!< Collection of satellites in the constellation
     perturb::JulianDate m_simulationStartJD;  //!< Global simulation start time
@@ -153,6 +162,7 @@ class Constellation : public Object
     std::vector<Ptr<SatelliteLink>> m_currentGroundLinks; //!< Cached satellite-ground topology
     double m_islMaxRange{0.0};                 //!< Max range for ISL creation (cached)
     double m_groundMaxRange{0.0};              //!< Max range for ground-link creation (cached)
+    Callback<void, Ptr<Constellation>> m_routeUpdateCallback; //!< Callback for route updates
 
     // Helper methods for ISL creation
     double CalculateSatelliteDistance(Ptr<Satellite> satA, Ptr<Satellite> satB);

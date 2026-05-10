@@ -25,6 +25,7 @@ build_lib(
     model/constellation.cc
     model/ground-station.cc
     model/isl-propagation-delay-model.cc
+    model/orbitshield-routing-helper.cc
     model/orbitshield-utils.cc
     model/satellite-link.cc
     model/satellite-mobility-model.cc
@@ -34,6 +35,7 @@ build_lib(
     model/constellation.h
     model/ground-station.h
     model/isl-propagation-delay-model.h
+    model/orbitshield-routing-helper.h
     model/orbitshield-utils.h
     model/satellite-link.h
     model/satellite-mobility-model.h
@@ -44,6 +46,7 @@ build_lib(
     test/test-constellation.cc
     test/test-isl.cc
     test/test-satellite.cc
+    test/test-routing.cc
     test/test-orbitshield.cc
 )
 
