@@ -37,16 +37,37 @@ SatelliteNetDevice::~SatelliteNetDevice()
 }
 
 void
+SatelliteNetDevice::AddLink(Ptr<SatelliteLink> link)
+{
+    NS_LOG_FUNCTION(this << link);
+    m_links.push_back(link);
+}
+
+void
 SatelliteNetDevice::SetLink(Ptr<SatelliteLink> link)
 {
     NS_LOG_FUNCTION(this << link);
-    m_link = link;
+    m_links.clear();
+    if (link)
+    {
+        m_links.push_back(link);
+    }
 }
 
 Ptr<SatelliteLink>
 SatelliteNetDevice::GetSatelliteLink() const
 {
-    return m_link;
+    if (m_links.empty())
+    {
+        return nullptr;
+    }
+    return m_links[0];
+}
+
+const std::vector<Ptr<SatelliteLink>>&
+SatelliteNetDevice::GetLinks() const
+{
+    return m_links;
 }
 
 bool
@@ -78,7 +99,11 @@ SatelliteNetDevice::GetIfIndex() const
 Ptr<Channel>
 SatelliteNetDevice::GetChannel() const
 {
-    return m_link;
+    if (m_links.empty())
+    {
+        return nullptr;
+    }
+    return m_links[0];
 }
 
 void
@@ -121,31 +146,34 @@ SatelliteNetDevice::AddLinkChangeCallback(Callback<void> callback)
 bool
 SatelliteNetDevice::IsBroadcast() const
 {
-    return true;
+    return false;
 }
 
 Address
 SatelliteNetDevice::GetBroadcast() const
 {
-    return Mac48Address("ff:ff:ff:ff:ff:ff");
+    NS_ASSERT_MSG(false, "Point-to-point devices do not have broadcast addresses");
+    return Address();
 }
 
 bool
 SatelliteNetDevice::IsMulticast() const
 {
-    return true;
+    return false;
 }
 
 Address
 SatelliteNetDevice::GetMulticast(Ipv4Address multicastGroup) const
 {
-    return Mac48Address::GetMulticast(multicastGroup);
+    NS_ASSERT_MSG(false, "Point-to-point devices do not support multicast");
+    return Address();
 }
 
 Address
 SatelliteNetDevice::GetMulticast(Ipv6Address addr) const
 {
-    return Mac48Address::GetMulticast(addr);
+    NS_ASSERT_MSG(false, "Point-to-point devices do not support multicast");
+    return Address();
 }
 
 bool
@@ -157,19 +185,28 @@ SatelliteNetDevice::IsBridge() const
 bool
 SatelliteNetDevice::IsPointToPoint() const
 {
-    return false;
+    return true;
 }
 
 bool
 SatelliteNetDevice::Send(Ptr<Packet> packet, const Address& dest, uint16_t protocolNumber)
 {
     NS_LOG_FUNCTION(this << packet << dest << protocolNumber);
-    if (!m_link)
+    if (m_links.empty())
     {
         return false;
     }
 
-    return m_link->Send(this, packet, dest, protocolNumber, m_address);
+    // Send packet on all active links
+    bool anySent = false;
+    for (const auto& link : m_links)
+    {
+        if (link && link->Send(this, packet, dest, protocolNumber, m_address))
+        {
+            anySent = true;
+        }
+    }
+    return anySent;
 }
 
 bool
@@ -179,12 +216,21 @@ SatelliteNetDevice::SendFrom(Ptr<Packet> packet,
                               uint16_t protocolNumber)
 {
     NS_LOG_FUNCTION(this << packet << source << dest << protocolNumber);
-    if (!m_link)
+    if (m_links.empty())
     {
         return false;
     }
 
-    return m_link->Send(this, packet, dest, protocolNumber, source);
+    // Send packet on all active links
+    bool anySent = false;
+    for (const auto& link : m_links)
+    {
+        if (link && link->Send(this, packet, dest, protocolNumber, source))
+        {
+            anySent = true;
+        }
+    }
+    return anySent;
 }
 
 Ptr<Node>
@@ -202,7 +248,7 @@ SatelliteNetDevice::SetNode(Ptr<Node> node)
 bool
 SatelliteNetDevice::NeedsArp() const
 {
-    return true;
+    return false;
 }
 
 void

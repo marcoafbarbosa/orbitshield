@@ -12,6 +12,8 @@
 #include "ns3/mac48-address.h"
 #include "satellite-link.h"
 
+#include <vector>
+
 namespace ns3
 {
 
@@ -23,8 +25,39 @@ class SatelliteNetDevice : public NetDevice
     SatelliteNetDevice();
     ~SatelliteNetDevice() override;
 
+    /**
+     * \brief Add a satellite link to this device
+     * 
+     * This device can manage multiple concurrent links, each with independent
+     * propagation delay models and packet delivery.
+     * 
+     * \param link The link to add
+     */
+    void AddLink(Ptr<SatelliteLink> link);
+
+    /**
+     * \brief Set a single link (deprecated; use AddLink for new code)
+     * 
+     * This method exists for backward compatibility. It clears existing links
+     * and adds the provided link as the sole link.
+     * 
+     * \param link The link to set
+     */
     void SetLink(Ptr<SatelliteLink> link);
+
+    /**
+     * \brief Get the first satellite link (deprecated; use GetLinks for new code)
+     * 
+     * \return The first link if any exist, nullptr otherwise
+     */
     Ptr<SatelliteLink> GetSatelliteLink() const;
+
+    /**
+     * \brief Get all satellite links attached to this device
+     * 
+     * \return Vector of links
+     */
+    const std::vector<Ptr<SatelliteLink>>& GetLinks() const;
 
     bool ReceiveFromChannel(Ptr<Packet> packet,
                             const Address& source,
@@ -61,7 +94,7 @@ class SatelliteNetDevice : public NetDevice
     bool SupportsSendFrom() const override;
 
   private:
-    Ptr<SatelliteLink> m_link;
+    std::vector<Ptr<SatelliteLink>> m_links; //!< Collection of links (point-to-point satellite channels)
     Ptr<Node> m_node;
     Address m_address;
     uint32_t m_ifIndex;

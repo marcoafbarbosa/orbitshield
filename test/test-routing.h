@@ -35,4 +35,30 @@ class OrbitShieldRoutingHelperTest : public TestCase
     void DoRun() override;
 };
 
+  /**
+   * \brief Test case for multi-link SatelliteNetDevice support
+   */
+  class OrbitShieldMultiLinkDeviceTest : public TestCase
+  {
+    public:
+      OrbitShieldMultiLinkDeviceTest();
+      ~OrbitShieldMultiLinkDeviceTest() override;
+
+    private:
+      void DoRun() override;
+  };
+
+  /**
+   * \brief Test case for ground station multi-link support
+   */
+  class OrbitShieldGroundStationMultiLinkTest : public TestCase
+  {
+    public:
+      OrbitShieldGroundStationMultiLinkTest();
+      ~OrbitShieldGroundStationMultiLinkTest() override;
+
+    private:
+      void DoRun() override;
+  };
+
 #endif /* TEST_ROUTING_H */

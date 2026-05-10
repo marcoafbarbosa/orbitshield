@@ -28,6 +28,8 @@ OrbitShieldTestSuite::OrbitShieldTestSuite()
     AddTestCase(new IslChannelTestCase(), TestCase::Duration::QUICK);
     AddTestCase(new OrbitShieldIridiumTopologyTest(), TestCase::Duration::QUICK);
     AddTestCase(new OrbitShieldRoutingHelperTest(), TestCase::Duration::QUICK);
+    AddTestCase(new OrbitShieldMultiLinkDeviceTest(), TestCase::Duration::QUICK);
+    AddTestCase(new OrbitShieldGroundStationMultiLinkTest(), TestCase::Duration::QUICK);
 }
 
 static OrbitShieldTestSuite g_orbitShieldTestSuite;

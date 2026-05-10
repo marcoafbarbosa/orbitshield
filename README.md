@@ -451,6 +451,39 @@ Tests include:
 - `OrbitShieldIridiumTopologyTest`: Verifies constellation and ground station loading from YAML
 - `OrbitShieldRoutingHelperTest`: Verifies routing helper API compile and link correctly
 
+## Multi-Link Node Support (Milestone 2)
+
+### Current Status
+
+Milestone 2 implements multi-link support for satellite and ground station nodes:
+
+- **Phase 2.1**: `SatelliteNetDevice` refactored to support multiple concurrent links:
+  - Changed internal storage from single link to vector of links
+  - Added `AddLink()` and `GetLinks()` methods for managing multiple links
+  - Preserved backward compatibility with `SetLink()` and `GetSatelliteLink()`
+  - Fixed trait methods: `IsPointToPoint()→true`, `NeedsArp()→false`, `IsBroadcast()→false`, `IsMulticast()→false`
+  - Each link operates independently with its own propagation delay model and packet delivery
+- **Phase 2.2**: Ground station multi-link support:
+  - Ground stations automatically benefit from `SatelliteNetDevice` multi-link refactoring
+  - Ground station nodes can now maintain multiple concurrent satellite-ground links
+
+### Key Changes
+
+**SatelliteNetDevice trait methods corrected for satellite point-to-point links:**
+
+| Method | Old Value | New Value | Rationale |
+|--------|-----------|-----------|-----------|
+| `IsPointToPoint()` | `false` | `true` | ISL/GSL channels are unicast point-to-point |
+| `IsBroadcast()` | `true` | `false` | No broadcast on point-to-point links |
+| `NeedsArp()` | `true` | `false` | ARP not needed for P2P links |
+| `IsMulticast()` | `true` | `false` | No multicast on point-to-point links |
+
+### Test Coverage
+
+- `OrbitShieldMultiLinkDeviceTest`: Verifies satellite device can manage multiple concurrent ISL links
+- `OrbitShieldGroundStationMultiLinkTest`: Verifies ground stations can simultaneously link to multiple satellites
+
+
 ## Coordinate System Notes
 
 - `Satellite::GetPosition(...)` returns **ECEF** coordinates.
