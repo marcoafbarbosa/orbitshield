@@ -507,15 +507,22 @@ Milestone 3 implements IPv4 stack integration and network layer routing foundati
   - `OrbitShieldRoutingHelper::Install()` now fully functional:
     - Installs ns-3 Internet stack (`InternetStackHelper`) on all satellite and ground station nodes
     - Enables IPv4 forwarding on satellites via `Ipv4::IpForward` attribute
-    - Assigns unique /30 subnets to each ISL and GSL interface
-    - ISL addresses assigned from 10.x.y.0/30 (x,y range from 0-255)
-    - Ground link addresses assigned from 10.(x+256).y.0/30 to avoid conflicts
+    - Assigns strict sequential /30 blocks starting from `10.0.0.0/30`, allocating all ISLs first and then GSLs in creation order
+- **Phase 3.11** (COMPLETED): Minimal refresh-safe routing refactor
+  - `Constellation::RefreshIslTopology()` now invokes the registered route-update callback after rebuilding current ISL and GSL link sets
+  - `OrbitShieldRoutingHelper::Install()` now registers a refresh callback and triggers an initial route computation after interface setup
+  - `OrbitShieldRoutingHelper::RecomputeRoutes()` now performs a minimal shortest-hop static route pass over currently active ISL+GSL connectivity
+  - Existing route entries are cleared and rebuilt to avoid stale forwarding state across topology refreshes
+  - Added `OrbitShieldRefreshSafeRoutingTest`, which exercises at least one refresh interval and verifies ICMP echo delivery during the refresh window
+- **Phase 3.2** (COMPLETED): End-to-end Tempe->Fairbanks ping-path validation
+  - Added `OrbitShieldTempeFairbanksPingPathTest` using `contrib/orbitshield/data/iridium-20260312.yaml`
+  - Verifies ICMP echo from Tempe to Fairbanks over a fixed `Simulator::Stop(Seconds(60.0))` window at epoch (no time offset)
+  - Asserts at least one echo reply is received, measured RTT is non-zero, and maximum RTT is `<= 500 ms`
+  - Asserts a multi-hop static route exists from Tempe to Fairbanks (`>= 2` hops), demonstrating routed traversal beyond a single-link path
 
 ### Limitations & Future Work
 
-- **Phase 3.2** (PENDING): End-to-end ping testing requires static routing logic
-  - Requires implementation of `RecomputeRoutes()` to compute paths (deferred to Milestone 4)
-  - Will add ping/echo test from Tempe to Fairbanks ground stations once routing is in place
+- Continue toward Milestone 4 topology-refresh validation scenarios and extended dynamic-behavior checks under repeated refresh intervals
 
 
 ## Coordinate System Notes

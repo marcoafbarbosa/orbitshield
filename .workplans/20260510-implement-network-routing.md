@@ -54,7 +54,7 @@ Follow the current OrbitShield design and ns-3 coding style:
 
 - Milestone 1: API scaffolding and test setup — **Implemented**
 - Milestone 2: Multi-link node support — **Implemented**
-- Milestone 3: IPv4 stack and simple ping path — **In progress** (Phase 3.1 implemented; Phase 3.2 not implemented)
+- Milestone 3: IPv4 stack and simple ping path — **Implemented** (Phases 3.1, 3.11, and 3.2 implemented)
 - Milestone 4: Topology refresh integration — **Not implemented**
 - Milestone 5: Complex routing behavior — **Not implemented**
 - Milestone 6: Cleanup and documentation — **Not implemented**
@@ -129,9 +129,42 @@ Follow the current OrbitShield design and ns-3 coding style:
   - Assign IPv4 addresses to each point-to-point link interface using `Ipv4AddressHelper` with base address `10.0.0.0` and mask `255.255.255.252` (`/30` subnets, one per link pair). Address blocks are allocated sequentially across all ISL and then GSL interfaces in creation order.
   - Keep helper code consistent with OrbitShield module structure.
 
+### Phase 3.11: Minimal refactor for refresh-safe routing
+
+- Status: **Implemented**
+- Goal: Ensure traffic does not fail on the first ISL/GSL topology refresh due to stale routes after satellite motion.
+- Work:
+  - Invoke `m_routeUpdateCallback` (if set) at the end of `Constellation::RefreshIslTopology()` after `m_currentIsls` and `m_currentGroundLinks` are rebuilt.
+  - In `OrbitShieldRoutingHelper::Install(Ptr<Constellation>)`, register a refresh callback that calls `RecomputeRoutes(constellation)` and invoke an initial route computation immediately after interface/address setup.
+  - Implement a minimal `OrbitShieldRoutingHelper::RecomputeRoutes(Ptr<Constellation>)` pass that:
+    - builds connectivity from current ISL+GSL links,
+    - clears existing `Ipv4StaticRouting` entries,
+    - repopulates shortest-hop routes for currently reachable destinations.
+  - Keep the existing Phase 3.1 sequential `/30` interface addressing behavior unchanged (no renumbering redesign in this phase).
+  - Add a focused dynamic-safety test that runs through at least one refresh interval and verifies:
+    - no crash/assertion during refresh,
+    - at least one successful ICMP echo delivery across the refresh window.
+  - Update `contrib/orbitshield/README.md` with refresh-safe routing behavior and constraints.
+- Success criteria:
+  - Build succeeds and `PASS orbitshield` remains green.
+  - Route recomputation is triggered on each topology refresh.
+  - A motion-driven refresh no longer causes immediate end-to-end forwarding failure due to stale static routes.
+- Date: `2026-05-11`
+- Commit: `N/A`
+- Commands run:
+  - `cd /home/marco/ns-3-dev && ./ns3 build`
+  - `cd /home/marco/ns-3-dev && ./ns3 run test-runner -- --suite=orbitshield --testcase=OrbitShieldRefreshSafeRoutingTest`
+  - `cd /home/marco/ns-3-dev && ./ns3 run test-runner -- --suite=orbitshield --verbose --stop-on-failure`
+- Result summary:
+  - Added refresh callback invocation from `Constellation::RefreshIslTopology()` and wired `OrbitShieldRoutingHelper::Install()` to register callback and run initial route recomputation.
+  - Implemented a minimal shortest-hop static route recomputation pass over current ISL+GSL graph with route-table clear/rebuild behavior.
+  - Added and registered `OrbitShieldRefreshSafeRoutingTest` to verify no crash/assertion during refresh and at least one ICMP echo success across the refresh window.
+  - Fixed `SatelliteNetDevice` send-path fanout for multi-link nodes by selecting a single next-hop link (using static-route gateway resolution when L2 destination is broadcast), eliminating duplicate-reply storms while preserving successful ICMP delivery across refresh.
+  - Validation result: `PASS orbitshield` including `Test refresh-safe routing recomputation with ICMP delivery across topology refresh`.
+
 ### Phase 3.2: Build end-to-end ping path over the Iridium topology
 
-- Status: **Not implemented**
+- Status: **Implemented**
 - Goal: Verify GS->satellite->satellite->GS traffic using the Iridium dataset.
 - Work:
   - Assign IPv4 addresses to each link interface created by ISLs and GSLs using the `/30` scheme defined in Phase 3.1.
@@ -144,6 +177,17 @@ Follow the current OrbitShield design and ns-3 coding style:
   - At least one ICMP echo reply is received at Tempe.
   - The reply round-trip time is non-zero and ≤ 500 ms (consistent with satellite propagation delay).
   - The test demonstrates that a multi-hop path exists across the satellite mesh.
+- Date: `2026-05-11`
+- Commit: `N/A`
+- Commands run:
+  - `cd /home/marco/ns-3-dev && ./ns3 build`
+  - `cd /home/marco/ns-3-dev && ./ns3 run test-runner -- --suite=orbitshield --verbose --stop-on-failure`
+  - `cd /home/marco/ns-3-dev && ./ns3 run test-runner -- --suite=orbitshield`
+- Result summary:
+  - Added `OrbitShieldTempeFairbanksPingPathTest` and registered it in the `orbitshield` suite.
+  - The test uses `iridium-20260312.yaml`, sends ICMP from Tempe to Fairbanks over a fixed 60-second window, and validates reply presence plus RTT bounds (`> 0`, `<= 500 ms`).
+  - Added explicit static-route hop-count assertion (`>= 2` hops) to demonstrate multi-hop routed traversal.
+  - Milestone 3 is now complete and ready for milestone commit once phase verification commands pass.
 
 ## Milestone 4: Topology Refresh Integration
 
@@ -502,8 +546,8 @@ This schema is required for reliable autopilot continuation across multiple runs
 
 ## Which Milestone/Phase to Do Next
 
-- The next work item is **Milestone 1, Phase 1.1**: build the initial test harness and verify that the Iridium YAML dataset loads correctly.
-- After that, proceed to **Milestone 1, Phase 1.2** for API stubs and compile-time scaffolding.
+- The next work item is **Milestone 4, Phase 4.1**: connect and harden full route-update integration for topology refresh (`RefreshIslTopology()`) using shortest-hop Dijkstra over active ISL+GSL links.
+- After that, proceed to **Milestone 4, Phase 4.2** for dynamic-behavior validation over repeated refresh intervals.
 
 ---
 

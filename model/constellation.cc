@@ -990,6 +990,11 @@ Constellation::RefreshIslTopology()
                                                    << "s, created " << m_currentIsls.size()
                                                    << " ISLs and " << m_currentGroundLinks.size()
                                                    << " ground links");
+
+    if (!m_routeUpdateCallback.IsNull())
+    {
+        m_routeUpdateCallback(this);
+    }
 }
 
 void

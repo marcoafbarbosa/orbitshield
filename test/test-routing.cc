@@ -6,14 +6,229 @@
 #include "ns3/orbitshield-module.h"
 #include "ns3/test.h"
 #include "ns3/ipv4.h"
+#include "ns3/ipv4-routing-table-entry.h"
+#include "ns3/ipv4-static-routing-helper.h"
+#include "ns3/ping-helper.h"
+#include "ns3/ping.h"
 #include "ns3/simulator.h"
 
 #include <algorithm>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE("RoutingTest");
+
+namespace
+{
+
+Ptr<GroundStation>
+FindGroundStationByName(const std::vector<Ptr<GroundStation>>& stations, const std::string& name)
+{
+    for (const auto& station : stations)
+    {
+        if (station && station->GetName() == name)
+        {
+            return station;
+        }
+    }
+    return nullptr;
+}
+
+Ipv4Address
+GetFirstNonLoopbackAddress(Ptr<Node> node)
+{
+    Ptr<Ipv4> ipv4 = node ? node->GetObject<Ipv4>() : nullptr;
+    if (!ipv4)
+    {
+        return Ipv4Address::GetZero();
+    }
+
+    for (uint32_t iface = 1; iface < ipv4->GetNInterfaces(); ++iface)
+    {
+        for (uint32_t addrIdx = 0; addrIdx < ipv4->GetNAddresses(iface); ++addrIdx)
+        {
+            Ipv4Address address = ipv4->GetAddress(iface, addrIdx).GetLocal();
+            if (address != Ipv4Address::GetLoopback())
+            {
+                return address;
+            }
+        }
+    }
+
+    return Ipv4Address::GetZero();
+}
+
+std::vector<Ipv4Address>
+GetNonLoopbackAddresses(Ptr<Node> node)
+{
+    std::vector<Ipv4Address> addresses;
+    Ptr<Ipv4> ipv4 = node ? node->GetObject<Ipv4>() : nullptr;
+    if (!ipv4)
+    {
+        return addresses;
+    }
+
+    for (uint32_t iface = 1; iface < ipv4->GetNInterfaces(); ++iface)
+    {
+        for (uint32_t addrIdx = 0; addrIdx < ipv4->GetNAddresses(iface); ++addrIdx)
+        {
+            Ipv4Address address = ipv4->GetAddress(iface, addrIdx).GetLocal();
+            if (address != Ipv4Address::GetLoopback())
+            {
+                addresses.push_back(address);
+            }
+        }
+    }
+
+    return addresses;
+}
+
+std::vector<Ptr<Node>>
+CollectConstellationNodes(Ptr<Constellation> constellation)
+{
+    std::vector<Ptr<Node>> nodes;
+    if (!constellation)
+    {
+        return nodes;
+    }
+
+    for (const auto& sat : constellation->GetSatellites())
+    {
+        nodes.push_back(sat);
+    }
+    for (const auto& gs : constellation->GetGroundStations())
+    {
+        nodes.push_back(gs);
+    }
+
+    return nodes;
+}
+
+std::unordered_map<uint32_t, Ptr<Node>>
+BuildIpv4AddressToNodeMap(const std::vector<Ptr<Node>>& nodes)
+{
+    std::unordered_map<uint32_t, Ptr<Node>> addressToNode;
+    for (const auto& node : nodes)
+    {
+        Ptr<Ipv4> ipv4 = node ? node->GetObject<Ipv4>() : nullptr;
+        if (!ipv4)
+        {
+            continue;
+        }
+
+        for (uint32_t iface = 1; iface < ipv4->GetNInterfaces(); ++iface)
+        {
+            for (uint32_t addrIdx = 0; addrIdx < ipv4->GetNAddresses(iface); ++addrIdx)
+            {
+                const Ipv4Address local = ipv4->GetAddress(iface, addrIdx).GetLocal();
+                if (local != Ipv4Address::GetLoopback())
+                {
+                    addressToNode[local.Get()] = node;
+                }
+            }
+        }
+    }
+
+    return addressToNode;
+}
+
+bool
+FindHostRoute(Ptr<Ipv4StaticRouting> staticRouting,
+              Ipv4Address destination,
+              Ipv4RoutingTableEntry& selected)
+{
+    if (!staticRouting)
+    {
+        return false;
+    }
+
+    for (uint32_t i = 0; i < staticRouting->GetNRoutes(); ++i)
+    {
+        Ipv4RoutingTableEntry route = staticRouting->GetRoute(i);
+        if (route.IsHost() && route.GetDest() == destination)
+        {
+            selected = route;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+uint32_t
+ComputeStaticHostRouteHopCount(Ptr<Node> source,
+                               Ptr<Node> destinationNode,
+                               Ipv4Address destinationAddress,
+                               const std::vector<Ptr<Node>>& nodes)
+{
+    if (!source || !destinationNode || destinationAddress == Ipv4Address::GetZero())
+    {
+        return 0;
+    }
+
+    Ipv4StaticRoutingHelper staticRoutingHelper;
+    const auto addressToNode = BuildIpv4AddressToNodeMap(nodes);
+    std::unordered_set<uint32_t> visitedNodeIds;
+
+    Ptr<Node> current = source;
+    uint32_t hops = 0;
+    const uint32_t hopLimit = static_cast<uint32_t>(nodes.size()) + 1;
+
+    while (current && current != destinationNode && hops <= hopLimit)
+    {
+        if (!visitedNodeIds.insert(current->GetId()).second)
+        {
+            return 0;
+        }
+
+        Ptr<Ipv4> ipv4 = current->GetObject<Ipv4>();
+        if (!ipv4)
+        {
+            return 0;
+        }
+
+        Ptr<Ipv4StaticRouting> staticRouting = staticRoutingHelper.GetStaticRouting(ipv4);
+        Ipv4RoutingTableEntry hostRoute;
+        if (!FindHostRoute(staticRouting, destinationAddress, hostRoute))
+        {
+            return 0;
+        }
+
+        Ptr<Node> nextNode = nullptr;
+        if (hostRoute.GetGateway().IsAny())
+        {
+            auto destinationIt = addressToNode.find(destinationAddress.Get());
+            if (destinationIt != addressToNode.end())
+            {
+                nextNode = destinationIt->second;
+            }
+        }
+        else
+        {
+            auto gatewayIt = addressToNode.find(hostRoute.GetGateway().Get());
+            if (gatewayIt != addressToNode.end())
+            {
+                nextNode = gatewayIt->second;
+            }
+        }
+
+        if (!nextNode)
+        {
+            return 0;
+        }
+
+        ++hops;
+        current = nextNode;
+    }
+
+    return (current == destinationNode) ? hops : 0;
+}
+
+} // namespace
 
 OrbitShieldIridiumTopologyTest::OrbitShieldIridiumTopologyTest()
     : TestCase("Test OrbitShield Iridium topology loading and discovery")
@@ -373,6 +588,181 @@ OrbitShieldIpv4AddressAssignmentTest::DoRun()
     }
 
     NS_LOG_INFO("Sequential /30 allocation verified: " << totalLinks << " link(s), all blocks correct");
+    Simulator::Destroy();
+}
+
+OrbitShieldRefreshSafeRoutingTest::OrbitShieldRefreshSafeRoutingTest()
+    : TestCase("Test refresh-safe routing recomputation with ICMP delivery across topology refresh")
+{
+}
+
+OrbitShieldRefreshSafeRoutingTest::~OrbitShieldRefreshSafeRoutingTest()
+{
+}
+
+void
+OrbitShieldRefreshSafeRoutingTest::OnRttTrace(uint16_t seq, Time rtt)
+{
+    (void)seq;
+    (void)rtt;
+    ++m_rttCount;
+}
+
+void
+OrbitShieldRefreshSafeRoutingTest::DoRun()
+{
+    Ptr<Constellation> constellation = CreateObject<Constellation>();
+    constellation->LoadFromRingFile("contrib/orbitshield/data/iridium-20260312.yaml");
+
+    constellation->SetIslRefreshInterval(Seconds(10.0));
+    constellation->CreateIslLinks(2000000.0);
+    constellation->CreateGroundLinks(50000000.0);
+    constellation->RefreshIslTopology();
+
+    OrbitShieldRoutingHelper routingHelper;
+    routingHelper.Install(constellation);
+
+    Ptr<GroundStation> tempe = FindGroundStationByName(constellation->GetGroundStations(), "Tempe");
+    Ptr<GroundStation> fairbanks = FindGroundStationByName(constellation->GetGroundStations(), "Fairbanks");
+
+    NS_TEST_ASSERT_MSG_NE(tempe, nullptr, "Tempe ground station must exist in Iridium dataset");
+    NS_TEST_ASSERT_MSG_NE(fairbanks, nullptr, "Fairbanks ground station must exist in Iridium dataset");
+
+    Ipv4Address destination = GetFirstNonLoopbackAddress(fairbanks);
+    NS_TEST_ASSERT_MSG_NE(destination,
+                          Ipv4Address::GetZero(),
+                          "Fairbanks must have a non-loopback IPv4 address after Install");
+
+    PingHelper pingHelper(destination);
+    pingHelper.SetAttribute("Interval", TimeValue(Seconds(1.0)));
+    pingHelper.SetAttribute("Size", UintegerValue(56));
+    pingHelper.SetAttribute("Count", UintegerValue(20));
+
+    ApplicationContainer apps = pingHelper.Install(tempe);
+    Ptr<Ping> ping = DynamicCast<Ping>(apps.Get(0));
+    NS_TEST_ASSERT_MSG_NE(ping, nullptr, "Ping application must be created");
+
+    m_rttCount = 0;
+    ping->TraceConnectWithoutContext("Rtt",
+                                     MakeCallback(&OrbitShieldRefreshSafeRoutingTest::OnRttTrace,
+                                                  this));
+
+    apps.Start(Seconds(1.0));
+    apps.Stop(Seconds(26.0));
+
+    Simulator::Stop(Seconds(30.0));
+    Simulator::Run();
+
+    NS_TEST_ASSERT_MSG_GT(m_rttCount,
+                          0u,
+                          "Expected at least one successful ICMP echo reply during topology refresh window");
+
+    Simulator::Destroy();
+}
+
+OrbitShieldTempeFairbanksPingPathTest::OrbitShieldTempeFairbanksPingPathTest()
+    : TestCase("Test end-to-end Tempe->Fairbanks ICMP path with RTT bounds and multi-hop routing")
+{
+}
+
+OrbitShieldTempeFairbanksPingPathTest::~OrbitShieldTempeFairbanksPingPathTest()
+{
+}
+
+void
+OrbitShieldTempeFairbanksPingPathTest::OnRttTrace(uint16_t seq, Time rtt)
+{
+    (void)seq;
+    ++m_replyCount;
+    if (m_replyCount == 1)
+    {
+        m_minRtt = rtt;
+        m_maxRtt = rtt;
+        return;
+    }
+
+    m_minRtt = std::min(m_minRtt, rtt);
+    m_maxRtt = std::max(m_maxRtt, rtt);
+}
+
+void
+OrbitShieldTempeFairbanksPingPathTest::DoRun()
+{
+    Ptr<Constellation> constellation = CreateObject<Constellation>();
+    constellation->LoadFromRingFile("contrib/orbitshield/data/iridium-20260312.yaml");
+
+    constellation->CreateIslLinks(2000000.0);
+    constellation->CreateGroundLinks(50000000.0);
+    constellation->RefreshIslTopology();
+
+    OrbitShieldRoutingHelper routingHelper;
+    routingHelper.Install(constellation);
+
+    Ptr<GroundStation> tempe = FindGroundStationByName(constellation->GetGroundStations(), "Tempe");
+    Ptr<GroundStation> fairbanks = FindGroundStationByName(constellation->GetGroundStations(), "Fairbanks");
+
+    NS_TEST_ASSERT_MSG_NE(tempe, nullptr, "Tempe ground station must exist in Iridium dataset");
+    NS_TEST_ASSERT_MSG_NE(fairbanks, nullptr, "Fairbanks ground station must exist in Iridium dataset");
+
+    const std::vector<Ptr<Node>> allNodes = CollectConstellationNodes(constellation);
+    const std::vector<Ipv4Address> fairbanksAddresses = GetNonLoopbackAddresses(fairbanks);
+    NS_TEST_ASSERT_MSG_GT(fairbanksAddresses.size(),
+                          0u,
+                          "Fairbanks must have at least one non-loopback IPv4 address after Install");
+
+    Ipv4Address destination = Ipv4Address::GetZero();
+    uint32_t hopCount = 0;
+    for (const auto& candidate : fairbanksAddresses)
+    {
+        const uint32_t candidateHops =
+            ComputeStaticHostRouteHopCount(tempe, fairbanks, candidate, allNodes);
+        if (candidateHops > hopCount)
+        {
+            hopCount = candidateHops;
+            destination = candidate;
+        }
+    }
+
+    NS_TEST_ASSERT_MSG_GT(hopCount,
+                          0u,
+                          "A static host route from Tempe to Fairbanks must exist");
+    NS_TEST_ASSERT_MSG_GT(hopCount,
+                          1u,
+                          "Expected a multi-hop path from Tempe to Fairbanks (>= 2 hops)");
+
+    PingHelper pingHelper(destination);
+    pingHelper.SetAttribute("Interval", TimeValue(Seconds(1.0)));
+    pingHelper.SetAttribute("Size", UintegerValue(56));
+    pingHelper.SetAttribute("Count", UintegerValue(60));
+    pingHelper.SetAttribute("VerboseMode", EnumValue(Ping::VerboseMode::SILENT));
+
+    ApplicationContainer apps = pingHelper.Install(tempe);
+    Ptr<Ping> ping = DynamicCast<Ping>(apps.Get(0));
+    NS_TEST_ASSERT_MSG_NE(ping, nullptr, "Ping application must be created");
+
+    m_replyCount = 0;
+    m_minRtt = Seconds(0);
+    m_maxRtt = Seconds(0);
+    ping->TraceConnectWithoutContext("Rtt",
+                                     MakeCallback(&OrbitShieldTempeFairbanksPingPathTest::OnRttTrace,
+                                                  this));
+
+    apps.Start(Seconds(0.0));
+    apps.Stop(Seconds(60.0));
+
+    Simulator::Stop(Seconds(60.0));
+    Simulator::Run();
+
+    NS_TEST_ASSERT_MSG_GT(m_replyCount,
+                          0u,
+                          "Expected at least one successful ICMP echo reply at Tempe within 60 seconds");
+    NS_TEST_ASSERT_MSG_GT(m_minRtt.GetNanoSeconds(),
+                          0,
+                          "Measured ICMP RTT must be non-zero");
+    NS_TEST_ASSERT_MSG_EQ(m_maxRtt <= MilliSeconds(500),
+                          true,
+                          "Measured ICMP RTT must be <= 500 ms");
+
     Simulator::Destroy();
 }
 

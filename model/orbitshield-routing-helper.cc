@@ -12,15 +12,135 @@
 #include "ns3/ipv4-interface.h"
 #include "ns3/ipv4.h"
 #include "ns3/ipv4-static-routing.h"
+#include "ns3/ipv4-static-routing-helper.h"
 #include "ns3/attribute.h"
 #include "ns3/log.h"
 
+#include <queue>
 #include <sstream>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace ns3
 {
 
 NS_LOG_COMPONENT_DEFINE("OrbitShieldRoutingHelper");
+
+namespace
+{
+
+struct LinkInterfaceInfo
+{
+    Ptr<Node> a;
+    Ptr<Node> b;
+    uint32_t aIf{0};
+    uint32_t bIf{0};
+    Ipv4Address aAddr;
+    Ipv4Address bAddr;
+};
+
+bool
+IsLoopbackAddress(const Ipv4Address& address)
+{
+    return address == Ipv4Address::GetLoopback();
+}
+
+std::vector<Ipv4Address>
+CollectNodeIpv4Addresses(Ptr<Ipv4> ipv4)
+{
+    std::vector<Ipv4Address> addresses;
+    if (!ipv4)
+    {
+        return addresses;
+    }
+
+    for (uint32_t i = 1; i < ipv4->GetNInterfaces(); ++i)
+    {
+        for (uint32_t j = 0; j < ipv4->GetNAddresses(i); ++j)
+        {
+            const Ipv4Address local = ipv4->GetAddress(i, j).GetLocal();
+            if (!IsLoopbackAddress(local))
+            {
+                addresses.push_back(local);
+            }
+        }
+    }
+
+    return addresses;
+}
+
+bool
+FindLinkInterfaceInfo(Ptr<SatelliteLink> link, LinkInterfaceInfo& info)
+{
+    if (!link)
+    {
+        return false;
+    }
+
+    Ptr<NetDevice> devA = link->GetDevice(0);
+    Ptr<NetDevice> devB = link->GetDevice(1);
+    if (!devA || !devB)
+    {
+        return false;
+    }
+
+    Ptr<Node> nodeA = devA->GetNode();
+    Ptr<Node> nodeB = devB->GetNode();
+    if (!nodeA || !nodeB)
+    {
+        return false;
+    }
+
+    Ptr<Ipv4> ipv4A = nodeA->GetObject<Ipv4>();
+    Ptr<Ipv4> ipv4B = nodeB->GetObject<Ipv4>();
+    if (!ipv4A || !ipv4B)
+    {
+        return false;
+    }
+
+    static const Ipv4Mask kLinkMask("255.255.255.252");
+    for (uint32_t ifA = 1; ifA < ipv4A->GetNInterfaces(); ++ifA)
+    {
+        for (uint32_t addrA = 0; addrA < ipv4A->GetNAddresses(ifA); ++addrA)
+        {
+            const Ipv4InterfaceAddress aIfAddr = ipv4A->GetAddress(ifA, addrA);
+            if (aIfAddr.GetMask() != kLinkMask || IsLoopbackAddress(aIfAddr.GetLocal()))
+            {
+                continue;
+            }
+
+            const Ipv4Address aNetwork = aIfAddr.GetLocal().CombineMask(kLinkMask);
+
+            for (uint32_t ifB = 1; ifB < ipv4B->GetNInterfaces(); ++ifB)
+            {
+                for (uint32_t addrB = 0; addrB < ipv4B->GetNAddresses(ifB); ++addrB)
+                {
+                    const Ipv4InterfaceAddress bIfAddr = ipv4B->GetAddress(ifB, addrB);
+                    if (bIfAddr.GetMask() != kLinkMask || IsLoopbackAddress(bIfAddr.GetLocal()))
+                    {
+                        continue;
+                    }
+
+                    if (aNetwork == bIfAddr.GetLocal().CombineMask(kLinkMask) &&
+                        aIfAddr.GetLocal() != bIfAddr.GetLocal())
+                    {
+                        info.a = nodeA;
+                        info.b = nodeB;
+                        info.aIf = ifA;
+                        info.bIf = ifB;
+                        info.aAddr = aIfAddr.GetLocal();
+                        info.bAddr = bIfAddr.GetLocal();
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+
+    return false;
+}
+
+} // namespace
 
 OrbitShieldRoutingHelper::OrbitShieldRoutingHelper()
 {
@@ -105,6 +225,10 @@ OrbitShieldRoutingHelper::Install(Ptr<Constellation> constellation)
     assignLinkAddresses(isls);
     assignLinkAddresses(groundLinks);
 
+    constellation->SetRouteUpdateCallback(
+        MakeCallback(&OrbitShieldRoutingHelper::RecomputeRoutes, this));
+    RecomputeRoutes(constellation);
+
     NS_LOG_INFO("Installed Internet stack and assigned IPv4 addresses to " << isls.size()
                                                                            << " ISLs and " << groundLinks.size() << " ground links");
 }
@@ -113,8 +237,149 @@ void
 OrbitShieldRoutingHelper::RecomputeRoutes(Ptr<Constellation> constellation)
 {
     NS_LOG_FUNCTION(this << constellation);
-    // Stub: no-op in Milestone 1.2
-    // Real implementation deferred to Milestone 4
+    if (!constellation)
+    {
+        return;
+    }
+
+    std::vector<Ptr<Node>> nodes;
+    for (const auto& sat : constellation->GetSatellites())
+    {
+        nodes.push_back(sat);
+    }
+    for (const auto& gs : constellation->GetGroundStations())
+    {
+        nodes.push_back(gs);
+    }
+
+    if (nodes.empty())
+    {
+        return;
+    }
+
+    std::unordered_map<uint32_t, std::size_t> nodeIndex;
+    nodeIndex.reserve(nodes.size());
+    for (std::size_t i = 0; i < nodes.size(); ++i)
+    {
+        nodeIndex[nodes[i]->GetId()] = i;
+    }
+
+    struct NeighborEdge
+    {
+        std::size_t nextNode;
+        uint32_t outIf;
+        Ipv4Address nextHop;
+    };
+
+    std::vector<std::vector<NeighborEdge>> adjacency(nodes.size());
+    auto addEdgesFromLinks = [&](const std::vector<Ptr<SatelliteLink>>& links) {
+        for (const auto& link : links)
+        {
+            LinkInterfaceInfo info;
+            if (!FindLinkInterfaceInfo(link, info))
+            {
+                continue;
+            }
+
+            auto aIt = nodeIndex.find(info.a->GetId());
+            auto bIt = nodeIndex.find(info.b->GetId());
+            if (aIt == nodeIndex.end() || bIt == nodeIndex.end())
+            {
+                continue;
+            }
+
+            adjacency[aIt->second].push_back({bIt->second, info.aIf, info.bAddr});
+            adjacency[bIt->second].push_back({aIt->second, info.bIf, info.aAddr});
+        }
+    };
+
+    addEdgesFromLinks(constellation->GetCurrentIsls());
+    addEdgesFromLinks(constellation->GetCurrentGroundLinks());
+
+    Ipv4StaticRoutingHelper staticRoutingHelper;
+    std::vector<Ptr<Ipv4StaticRouting>> perNodeRouting(nodes.size());
+    std::vector<std::vector<Ipv4Address>> perNodeAddresses(nodes.size());
+
+    for (std::size_t i = 0; i < nodes.size(); ++i)
+    {
+        Ptr<Ipv4> ipv4 = nodes[i]->GetObject<Ipv4>();
+        if (!ipv4)
+        {
+            continue;
+        }
+
+        Ptr<Ipv4StaticRouting> staticRouting = staticRoutingHelper.GetStaticRouting(ipv4);
+        while (staticRouting->GetNRoutes() > 0)
+        {
+            staticRouting->RemoveRoute(0);
+        }
+
+        perNodeRouting[i] = staticRouting;
+        perNodeAddresses[i] = CollectNodeIpv4Addresses(ipv4);
+    }
+
+    for (std::size_t source = 0; source < nodes.size(); ++source)
+    {
+        Ptr<Ipv4StaticRouting> sourceRouting = perNodeRouting[source];
+        if (!sourceRouting)
+        {
+            continue;
+        }
+
+        std::vector<int32_t> parent(nodes.size(), -1);
+        std::queue<std::size_t> pending;
+        parent[source] = static_cast<int32_t>(source);
+        pending.push(source);
+
+        while (!pending.empty())
+        {
+            const std::size_t current = pending.front();
+            pending.pop();
+
+            for (const auto& edge : adjacency[current])
+            {
+                if (parent[edge.nextNode] == -1)
+                {
+                    parent[edge.nextNode] = static_cast<int32_t>(current);
+                    pending.push(edge.nextNode);
+                }
+            }
+        }
+
+        std::unordered_set<uint32_t> installedDestinations;
+        for (std::size_t destination = 0; destination < nodes.size(); ++destination)
+        {
+            if (destination == source || parent[destination] == -1)
+            {
+                continue;
+            }
+
+            std::size_t firstHop = destination;
+            while (parent[firstHop] != static_cast<int32_t>(source))
+            {
+                firstHop = static_cast<std::size_t>(parent[firstHop]);
+            }
+
+            const auto nextHopIt = std::find_if(adjacency[source].begin(), adjacency[source].end(),
+                                                [firstHop](const NeighborEdge& edge) {
+                                                    return edge.nextNode == firstHop;
+                                                });
+            if (nextHopIt == adjacency[source].end())
+            {
+                continue;
+            }
+
+            for (const auto& destinationAddress : perNodeAddresses[destination])
+            {
+                if (installedDestinations.insert(destinationAddress.Get()).second)
+                {
+                    sourceRouting->AddHostRouteTo(destinationAddress,
+                                                  nextHopIt->nextHop,
+                                                  nextHopIt->outIf);
+                }
+            }
+        }
+    }
 }
 
 }  // namespace ns3
