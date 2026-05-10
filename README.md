@@ -61,9 +61,8 @@ The module provides:
 From the ns-3 root:
 
 ```bash
+./ns3 configure
 ./ns3 build
-./ns3 run orbitshield-load-from-yaml
-
 ./ns3 run orbitshield-isl-visualizer -- \
   --ringFile=contrib/orbitshield/data/iridium-20260312.yaml \
   --islMaxRange=5000 \
