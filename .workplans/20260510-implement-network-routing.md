@@ -57,7 +57,7 @@ Follow the current OrbitShield design and ns-3 coding style:
 - Milestone 3: IPv4 stack and simple ping path — **Implemented** (Phases 3.1, 3.11, and 3.2 implemented)
 - Milestone 4: Topology refresh integration — **Implemented**
 - Milestone 5: Complex routing behavior — **Implemented**
-- Milestone 6: Cleanup and documentation — **Not implemented**
+- Milestone 6: Cleanup and documentation — **Implemented**
 
 ## Milestone 1: API Scaffolding and Test Setup
 
