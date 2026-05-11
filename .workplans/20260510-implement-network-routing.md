@@ -55,7 +55,7 @@ Follow the current OrbitShield design and ns-3 coding style:
 - Milestone 1: API scaffolding and test setup — **Implemented**
 - Milestone 2: Multi-link node support — **Implemented**
 - Milestone 3: IPv4 stack and simple ping path — **Implemented** (Phases 3.1, 3.11, and 3.2 implemented)
-- Milestone 4: Topology refresh integration — **Not implemented**
+- Milestone 4: Topology refresh integration — **Implemented**
 - Milestone 5: Complex routing behavior — **Not implemented**
 - Milestone 6: Cleanup and documentation — **Not implemented**
 
@@ -193,7 +193,7 @@ Follow the current OrbitShield design and ns-3 coding style:
 
 ### Phase 4.1: Connect route updates to `Constellation::RefreshIslTopology()`
 
-- Status: **Not implemented**
+- Status: **Implemented**
 - Goal: Make route updates react to the dynamic ISL/GSL refresh mechanism.
 - Work:
   - Add a refresh callback or event hook in `Constellation` by invoking `m_routeUpdateCallback` (if set) at the end of `RefreshIslTopology()`.
@@ -203,7 +203,7 @@ Follow the current OrbitShield design and ns-3 coding style:
 
 ### Phase 4.2: Validate dynamic behavior with new tests
 
-- Status: **Not implemented**
+- Status: **Implemented**
 - Goal: Confirm that routes are updated after topology changes.
 - Work:
   - Add a dynamic route refresh test using the Iridium YAML dataset.
@@ -547,7 +547,7 @@ This schema is required for reliable autopilot continuation across multiple runs
 ## Which Milestone/Phase to Do Next
 
 - The next work item is **Milestone 4, Phase 4.1**: connect and harden full route-update integration for topology refresh (`RefreshIslTopology()`) using shortest-hop Dijkstra over active ISL+GSL links.
-- After that, proceed to **Milestone 4, Phase 4.2** for dynamic-behavior validation over repeated refresh intervals.
+- After that, proceed to **Milestone 5, Phase 5.2** for routing strategy selection and validation.
 
 ---
 
