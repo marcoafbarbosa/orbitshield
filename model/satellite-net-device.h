@@ -95,14 +95,14 @@ class SatelliteNetDevice : public NetDevice
 
   private:
     std::vector<Ptr<SatelliteLink>> m_links; //!< Collection of links (point-to-point satellite channels)
-    Ptr<Node> m_node;
-    Address m_address;
-    uint32_t m_ifIndex;
-    bool m_linkUp;
-    uint16_t m_mtu;
-    ReceiveCallback m_receiveCallback;
-    PromiscReceiveCallback m_promiscCallback;
-    Callback<void> m_linkChangeCallback;
+    Ptr<Node> m_node;                          //!< The node this device is attached to
+    Address m_address;                          //!< MAC address of this device
+    uint32_t m_ifIndex;                         //!< Interface index assigned by the node
+    bool m_linkUp;                              //!< Whether the link is considered up
+    uint16_t m_mtu;                             //!< Maximum transmission unit in bytes
+    ReceiveCallback m_receiveCallback;          //!< Callback invoked on packet reception
+    PromiscReceiveCallback m_promiscCallback;   //!< Callback for promiscuous mode reception
+    Callback<void> m_linkChangeCallback;        //!< Callback registered for link-state changes
 };
 
 } // namespace ns3
