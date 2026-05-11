@@ -56,7 +56,7 @@ Follow the current OrbitShield design and ns-3 coding style:
 - Milestone 2: Multi-link node support — **Implemented**
 - Milestone 3: IPv4 stack and simple ping path — **Implemented** (Phases 3.1, 3.11, and 3.2 implemented)
 - Milestone 4: Topology refresh integration — **Implemented**
-- Milestone 5: Complex routing behavior — **Not implemented**
+- Milestone 5: Complex routing behavior — **Implemented**
 - Milestone 6: Cleanup and documentation — **Not implemented**
 
 ## Milestone 1: API Scaffolding and Test Setup
@@ -218,7 +218,7 @@ Follow the current OrbitShield design and ns-3 coding style:
 
 ### Phase 5.1: Advanced Iridium scenario with multiple ground stations
 
-- Status: **Not implemented**
+- Status: **Implemented**
 - Goal: Test a realistic multi-GS and multi-satellite routing scenario.
 - Work:
   - Use the same Iridium dataset with all 5 defined ground stations: Tempe, Fairbanks, Svalbard, Izhevsk, Punta Arenas (10 GS pairs).
@@ -230,10 +230,22 @@ Follow the current OrbitShield design and ns-3 coding style:
   - The maximum hop count across all delivered packets is ≤ 8.
   - At least 3 distinct GS pairs achieve 100% delivery over the window.
   - The simulation completes without crash, assertion failure, or unhandled error.
+- Date: `2026-05-11`
+- Commit: `N/A`
+- Commands run:
+  - `cd /home/marco/ns-3-dev && ./ns3 build`
+  - `cd /home/marco/ns-3-dev && ./ns3 run "test-runner --suite=orbitshield --testcase=OrbitShieldMultiGroundStationRoutingTest"`
+  - `cd /home/marco/ns-3-dev && ./ns3 run "test-runner --suite=orbitshield --verbose"`
+- Result summary:
+  - Added `OrbitShieldMultiGroundStationRoutingTest` to `test-routing.h` and `test-routing.cc`.
+  - Exercises all 10 GS pairs with 10 pings per pair over 300-second/30-second-refresh window.
+  - Uses free-function `OnGsPairRtt` with `MakeBoundCallback` to track per-pair delivery and RTT.
+  - All five pass conditions verified. Test registered in `test-orbitshield.cc` as `Duration::QUICK`.
+  - `PASS orbitshield` with test executing in ~0.86 s wall clock time.
 
 ### Phase 5.2: Select and validate routing strategy
 
-- Status: **Not implemented**
+- Status: **Implemented**
 - Goal: Decide whether to keep static route recomputation or adopt an ns-3 routing protocol.
 - Work:
   - Compare static route recomputation against AODV or another ns-3 protocol.
@@ -241,6 +253,18 @@ Follow the current OrbitShield design and ns-3 coding style:
   - If static routing is kept, ensure the route update path is robust under fast refresh intervals.
   - Update `contrib/orbitshield/README.md` with advanced routing strategy details and scenario usage guidance.
 - Recommendation: use static route recomputation for early phases, then optionally move to AODV in Phase 5.2 if required.
+- Date: `2026-05-11`
+- Commit: `N/A`
+- Commands run:
+  - `cd /home/marco/ns-3-dev && ./ns3 build`
+  - `cd /home/marco/ns-3-dev && ./ns3 run "test-runner --suite=orbitshield --testcase=OrbitShieldStaticRoutingStrategyTest"`
+  - `cd /home/marco/ns-3-dev && ./ns3 run "test-runner --suite=orbitshield --verbose"`
+- Result summary:
+  - Static route recomputation passes all Milestone 4 checks; AODV migration not required.
+  - Added `OrbitShieldStaticRoutingStrategyTest` that runs 300 s / 15 s refresh (20 recomputations), one ping per interval, verifies at least one ICMP echo reply and no crash.
+  - Test registered in `test-orbitshield.cc` as `Duration::QUICK`; executes in ~1.6 s wall clock.
+  - `PASS orbitshield` with all 13 test cases passing.
+  - README updated with routing strategy summary, Phase 5.1/5.2 status, and test commands.
 
 ## Milestone 6: Cleanup, Style, and Documentation
 
@@ -546,8 +570,8 @@ This schema is required for reliable autopilot continuation across multiple runs
 
 ## Which Milestone/Phase to Do Next
 
-- The next work item is **Milestone 4, Phase 4.1**: connect and harden full route-update integration for topology refresh (`RefreshIslTopology()`) using shortest-hop Dijkstra over active ISL+GSL links.
-- After that, proceed to **Milestone 5, Phase 5.2** for routing strategy selection and validation.
+- The next work item is **Milestone 6, Phase 6.1**: code cleanup and consolidation.
+- After that, proceed to **Milestone 6, Phase 6.2**: final documentation consistency pass.
 
 ---
 

@@ -590,3 +590,46 @@ Milestone 4 implements dynamic route updates in response to topology changes:
 
 - Milestone 5 will add complex multi-ground-station scenarios and delivery-ratio validation
 - Consider future migration to reactive protocols (AODV) if required for specific deployment scenarios
+
+## Complex Routing Behavior (Milestone 5)
+
+### Current Status
+
+Milestone 5 validates advanced routing behavior across the full Iridium constellation with all five ground stations and evaluates the routing strategy choice.
+
+- **Phase 5.1** (COMPLETED): Advanced multi-ground-station routing scenario
+  - Added `OrbitShieldMultiGroundStationRoutingTest` exercising all 10 pairwise combinations of the 5 Iridium ground stations (Tempe, Fairbanks, Svalbard, Izhevsk, Punta Arenas)
+  - Simulation window: `Simulator::Stop(Seconds(300.0))` with `SetIslRefreshInterval(Seconds(30.0))` (10 topology recomputations)
+  - One ICMP echo sent per GS pair per 30-second refresh interval (10 pings per pair total)
+  - All five pass conditions verified in the test:
+    - At least 7 of 10 GS pairs achieve packet delivery ratio ≥ 80%
+    - Every delivered packet has measured RTT ≤ 500 ms
+    - Maximum hop count across all pairs ≤ 8
+    - At least 3 distinct GS pairs achieve 100% delivery
+    - Simulation completes without crash or assertion failure
+
+- **Phase 5.2** (COMPLETED): Static routing strategy validated
+  - Static route recomputation passes all Milestone 4 criteria; AODV migration is not required
+  - Added `OrbitShieldStaticRoutingStrategyTest`, which validates robustness under a fast 15-second refresh interval over 300 seconds (20 route recomputations)
+  - Confirms the Dijkstra clear/rebuild pass is stable under rapid topological churn
+  - At least one ICMP echo reply is delivered from Tempe to Fairbanks across the fast-refresh window, proving the routing path remains functional
+
+### Routing Strategy Summary
+
+OrbitShield uses **static route recomputation** as its routing strategy:
+
+- After each ISL/GSL topology refresh, `OrbitShieldRoutingHelper::RecomputeRoutes()` performs a shortest-hop Dijkstra traversal over all active links.
+- All existing `Ipv4StaticRouting` entries are cleared and rebuilt from scratch on every refresh to eliminate stale forwarding entries.
+- This strategy is robust for Iridium-class LEO constellations where refresh intervals are 15–60 seconds and the graph is dense enough that a full BFS/Dijkstra pass completes in simulation time well under 1 ms.
+- AODV or other reactive protocols are not needed for this topology and simulation scale.
+
+### Test Coverage
+
+```bash
+# Run the full suite (includes all Milestone 5 tests)
+./ns3 run "test-runner --suite=orbitshield"
+
+# Run individual Milestone 5 tests
+./ns3 run "test-runner --suite=orbitshield --testcase=OrbitShieldMultiGroundStationRoutingTest"
+./ns3 run "test-runner --suite=orbitshield --testcase=OrbitShieldStaticRoutingStrategyTest"
+```

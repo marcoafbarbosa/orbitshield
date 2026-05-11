@@ -144,4 +144,48 @@ class OrbitShieldDynamicRouteRefreshTest : public TestCase
     Time m_maxRtt{Seconds(0)};
 };
 
+/**
+ * \brief Test case for multi-ground-station routing across the Iridium constellation
+ *
+ * Verifies that all 5 ground stations (Tempe, Fairbanks, Svalbard, Izhevsk, Punta Arenas)
+ * can route traffic between all 10 pairwise combinations over a 300-second simulation window
+ * with 30-second topology refresh intervals.
+ *
+ * Pass conditions:
+ * - At least 7 of 10 GS pairs achieve a delivery ratio >= 80%.
+ * - Every delivered packet has RTT <= 500 ms.
+ * - Maximum hop count across all delivered packets is <= 8.
+ * - At least 3 distinct GS pairs achieve 100% delivery.
+ * - Simulation completes without crash or assertion failure.
+ */
+class OrbitShieldMultiGroundStationRoutingTest : public TestCase
+{
+  public:
+    OrbitShieldMultiGroundStationRoutingTest();
+    ~OrbitShieldMultiGroundStationRoutingTest() override;
+
+  private:
+    void DoRun() override;
+};
+
+/**
+ * \brief Test case to validate static routing strategy under fast topology refresh
+ *
+ * Confirms that static route recomputation remains robust when topology refreshes
+ * occur frequently (every 15 seconds over 300 seconds = 20 recomputations).
+ * Validates no crash, assertion failure, or routing breakdown under rapid refresh.
+ */
+class OrbitShieldStaticRoutingStrategyTest : public TestCase
+{
+  public:
+    OrbitShieldStaticRoutingStrategyTest();
+    ~OrbitShieldStaticRoutingStrategyTest() override;
+
+  private:
+    void DoRun() override;
+    void OnRttTrace(uint16_t seq, Time rtt);
+
+    uint32_t m_replyCount{0};
+};
+
 #endif /* TEST_ROUTING_H */

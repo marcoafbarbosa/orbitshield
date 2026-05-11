@@ -33,7 +33,9 @@ OrbitShieldTestSuite::OrbitShieldTestSuite()
     AddTestCase(new OrbitShieldIpv4AddressAssignmentTest(), TestCase::Duration::QUICK);
     AddTestCase(new OrbitShieldRefreshSafeRoutingTest(), TestCase::Duration::QUICK);
     AddTestCase(new OrbitShieldTempeFairbanksPingPathTest(), TestCase::Duration::QUICK);
-     AddTestCase(new OrbitShieldDynamicRouteRefreshTest(), TestCase::Duration::QUICK);
+    AddTestCase(new OrbitShieldDynamicRouteRefreshTest(), TestCase::Duration::QUICK);
+    AddTestCase(new OrbitShieldMultiGroundStationRoutingTest(), TestCase::Duration::QUICK);
+    AddTestCase(new OrbitShieldStaticRoutingStrategyTest(), TestCase::Duration::QUICK);
 }
 
 static OrbitShieldTestSuite g_orbitShieldTestSuite;

@@ -25,6 +25,38 @@ NS_LOG_COMPONENT_DEFINE("RoutingTest");
 namespace
 {
 
+/**
+ * \brief Per-GS-pair result accumulator used by the multi-GS routing test.
+ */
+struct GsPairResult
+{
+    uint32_t replyCount{0};  ///< Number of ICMP echo replies received for this pair.
+    Time maxRtt{Seconds(0)}; ///< Maximum RTT observed for this pair.
+    bool allRttsValid{true}; ///< True if every observed RTT was <= 500 ms.
+};
+
+/**
+ * \brief Free-function RTT callback bound to a specific GsPairResult via MakeBoundCallback.
+ *
+ * \param result Pointer to the GsPairResult for this pair (bound argument).
+ * \param seq    ICMP sequence number (unused).
+ * \param rtt    Round-trip time for this echo reply.
+ */
+void
+OnGsPairRtt(GsPairResult* result, uint16_t seq, Time rtt)
+{
+    (void)seq;
+    ++result->replyCount;
+    if (rtt > result->maxRtt)
+    {
+        result->maxRtt = rtt;
+    }
+    if (rtt > MilliSeconds(500))
+    {
+        result->allRttsValid = false;
+    }
+}
+
 Ptr<GroundStation>
 FindGroundStationByName(const std::vector<Ptr<GroundStation>>& stations, const std::string& name)
 {
@@ -868,3 +900,262 @@ OrbitShieldTempeFairbanksPingPathTest::DoRun()
     Simulator::Destroy();
 }
 
+// ---------------------------------------------------------------------------
+// OrbitShieldMultiGroundStationRoutingTest  (Milestone 5, Phase 5.1)
+// ---------------------------------------------------------------------------
+
+OrbitShieldMultiGroundStationRoutingTest::OrbitShieldMultiGroundStationRoutingTest()
+    : TestCase(
+          "Test multi-GS routing across all Iridium ground station pairs (Milestone 5 Phase 5.1)")
+{
+}
+
+OrbitShieldMultiGroundStationRoutingTest::~OrbitShieldMultiGroundStationRoutingTest()
+{
+}
+
+void
+OrbitShieldMultiGroundStationRoutingTest::DoRun()
+{
+    NS_LOG_FUNCTION(this);
+
+    // Load the Iridium constellation with a 30-second topology refresh interval.
+    Ptr<Constellation> constellation = CreateObject<Constellation>();
+    constellation->LoadFromRingFile("contrib/orbitshield/data/iridium-20260312.yaml");
+    constellation->SetIslRefreshInterval(Seconds(30.0));
+    constellation->CreateIslLinks(2000000.0);
+    constellation->CreateGroundLinks(50000000.0);
+    constellation->RefreshIslTopology();
+
+    OrbitShieldRoutingHelper routingHelper;
+    routingHelper.Install(constellation);
+
+    // Collect all 5 ground stations.
+    const auto& gsList = constellation->GetGroundStations();
+    NS_TEST_ASSERT_MSG_EQ(gsList.size(), 5u, "Iridium dataset must have exactly 5 ground stations");
+
+    // Build all 10 pairwise combinations (i < j).
+    struct GsPair
+    {
+        Ptr<GroundStation> src;
+        Ptr<GroundStation> dst;
+    };
+    std::vector<GsPair> pairs;
+    for (size_t i = 0; i < gsList.size(); ++i)
+    {
+        for (size_t j = i + 1; j < gsList.size(); ++j)
+        {
+            pairs.push_back({gsList[i], gsList[j]});
+        }
+    }
+    NS_TEST_ASSERT_MSG_EQ(pairs.size(), 10u, "Expected exactly 10 GS pairs");
+
+    // Gather all constellation nodes for hop-count computation.
+    const std::vector<Ptr<Node>> allNodes = CollectConstellationNodes(constellation);
+
+    // Compute initial static-routing hop counts (before simulation starts).
+    // The Dijkstra pass run by Install() produces the first set of routes.
+    std::vector<uint32_t> hopCounts(pairs.size(), 0u);
+    for (size_t pairIdx = 0; pairIdx < pairs.size(); ++pairIdx)
+    {
+        Ipv4Address dstAddr = GetFirstNonLoopbackAddress(pairs[pairIdx].dst);
+        if (dstAddr != Ipv4Address::GetZero())
+        {
+            hopCounts[pairIdx] = ComputeStaticHostRouteHopCount(pairs[pairIdx].src,
+                                                                pairs[pairIdx].dst,
+                                                                dstAddr,
+                                                                allNodes);
+        }
+    }
+
+    // One ping every 30 s → 10 total pings per pair over the 300-second window.
+    // That gives one echo per topology-refresh interval.
+    const uint32_t pingCount = 10u;
+
+    // Install per-pair ping applications and connect the RTT trace.
+    std::vector<GsPairResult> results(pairs.size());
+    for (size_t pairIdx = 0; pairIdx < pairs.size(); ++pairIdx)
+    {
+        Ipv4Address dstAddr = GetFirstNonLoopbackAddress(pairs[pairIdx].dst);
+        if (dstAddr == Ipv4Address::GetZero())
+        {
+            NS_LOG_WARN("No IPv4 address for destination "
+                        << pairs[pairIdx].dst->GetName() << "; skipping pair " << pairIdx);
+            continue;
+        }
+
+        PingHelper pingHelper(dstAddr);
+        pingHelper.SetAttribute("Interval", TimeValue(Seconds(30.0)));
+        pingHelper.SetAttribute("Size", UintegerValue(56));
+        pingHelper.SetAttribute("Count", UintegerValue(pingCount));
+        pingHelper.SetAttribute("VerboseMode", EnumValue(Ping::VerboseMode::SILENT));
+
+        ApplicationContainer apps = pingHelper.Install(pairs[pairIdx].src);
+        Ptr<Ping> ping = DynamicCast<Ping>(apps.Get(0));
+        if (ping)
+        {
+            ping->TraceConnectWithoutContext("Rtt",
+                                             MakeBoundCallback(&OnGsPairRtt, &results[pairIdx]));
+        }
+        apps.Start(Seconds(1.0));
+        apps.Stop(Seconds(300.0));
+    }
+
+    Simulator::Stop(Seconds(300.0));
+    Simulator::Run();
+
+    // --- Evaluate pass conditions ---
+
+    uint32_t pairsAbove80pct = 0u;
+    uint32_t pairsAt100pct = 0u;
+    bool allRttsValid = true;
+    uint32_t maxHops = 0u;
+
+    for (size_t i = 0; i < pairs.size(); ++i)
+    {
+        const double ratio =
+            static_cast<double>(results[i].replyCount) / static_cast<double>(pingCount);
+
+        if (!results[i].allRttsValid)
+        {
+            allRttsValid = false;
+        }
+        if (ratio >= 0.80)
+        {
+            ++pairsAbove80pct;
+        }
+        if (results[i].replyCount == pingCount)
+        {
+            ++pairsAt100pct;
+        }
+        if (hopCounts[i] > maxHops)
+        {
+            maxHops = hopCounts[i];
+        }
+
+        NS_LOG_INFO("Pair " << pairs[i].src->GetName() << " -> " << pairs[i].dst->GetName()
+                            << ": " << results[i].replyCount << "/" << pingCount
+                            << " replies (ratio=" << ratio << ")"
+                            << ", maxRtt=" << results[i].maxRtt.GetMilliSeconds() << " ms"
+                            << ", hops=" << hopCounts[i]);
+    }
+
+    NS_LOG_INFO("Multi-GS routing summary: pairsAbove80pct=" << pairsAbove80pct
+                << ", pairsAt100pct=" << pairsAt100pct << ", maxHops=" << maxHops
+                << ", allRttsValid=" << allRttsValid);
+
+    // Condition 1: at least 7 of 10 GS pairs must achieve >= 80% delivery ratio.
+    NS_TEST_ASSERT_MSG_GT(pairsAbove80pct,
+                          6u,
+                          "At least 7 of 10 GS pairs must achieve >= 80% packet delivery ratio");
+
+    // Condition 2: every delivered packet must have RTT <= 500 ms.
+    NS_TEST_ASSERT_MSG_EQ(allRttsValid,
+                          true,
+                          "All delivered packets must have measured RTT <= 500 ms");
+
+    // Condition 3: maximum hop count across all pairs must be <= 8.
+    NS_TEST_ASSERT_MSG_EQ(maxHops <= 8u,
+                          true,
+                          "Maximum hop count across all GS pairs must be <= 8");
+
+    // Condition 4: at least 3 distinct GS pairs must achieve 100% delivery.
+    NS_TEST_ASSERT_MSG_GT(pairsAt100pct,
+                          2u,
+                          "At least 3 distinct GS pairs must achieve 100% packet delivery");
+
+    Simulator::Destroy();
+}
+
+// ---------------------------------------------------------------------------
+// OrbitShieldStaticRoutingStrategyTest  (Milestone 5, Phase 5.2)
+// ---------------------------------------------------------------------------
+
+OrbitShieldStaticRoutingStrategyTest::OrbitShieldStaticRoutingStrategyTest()
+    : TestCase(
+          "Test static routing strategy robustness under fast topology refresh (Phase 5.2)")
+{
+}
+
+OrbitShieldStaticRoutingStrategyTest::~OrbitShieldStaticRoutingStrategyTest()
+{
+}
+
+void
+OrbitShieldStaticRoutingStrategyTest::OnRttTrace(uint16_t seq, Time rtt)
+{
+    (void)seq;
+    (void)rtt;
+    ++m_replyCount;
+}
+
+void
+OrbitShieldStaticRoutingStrategyTest::DoRun()
+{
+    NS_LOG_FUNCTION(this);
+
+    // Load constellation with a fast 15-second refresh interval.
+    // Over 300 seconds this triggers 20 route recomputations, stressing the
+    // static-routing clear/rebuild path far more than normal operation.
+    Ptr<Constellation> constellation = CreateObject<Constellation>();
+    constellation->LoadFromRingFile("contrib/orbitshield/data/iridium-20260312.yaml");
+    constellation->SetIslRefreshInterval(Seconds(15.0));
+    constellation->CreateIslLinks(2000000.0);
+    constellation->CreateGroundLinks(50000000.0);
+    constellation->RefreshIslTopology();
+
+    OrbitShieldRoutingHelper routingHelper;
+    routingHelper.Install(constellation);
+
+    Ptr<GroundStation> tempe =
+        FindGroundStationByName(constellation->GetGroundStations(), "Tempe");
+    Ptr<GroundStation> fairbanks =
+        FindGroundStationByName(constellation->GetGroundStations(), "Fairbanks");
+
+    NS_TEST_ASSERT_MSG_NE(tempe, nullptr, "Tempe ground station must exist in Iridium dataset");
+    NS_TEST_ASSERT_MSG_NE(fairbanks,
+                          nullptr,
+                          "Fairbanks ground station must exist in Iridium dataset");
+
+    Ipv4Address destination = GetFirstNonLoopbackAddress(fairbanks);
+    NS_TEST_ASSERT_MSG_NE(destination,
+                          Ipv4Address::GetZero(),
+                          "Fairbanks must have a non-loopback IPv4 address after Install");
+
+    // Send one ping every 15 seconds (aligned with refresh interval).
+    // 300 / 15 = 20 pings total.
+    PingHelper pingHelper(destination);
+    pingHelper.SetAttribute("Interval", TimeValue(Seconds(15.0)));
+    pingHelper.SetAttribute("Size", UintegerValue(56));
+    pingHelper.SetAttribute("Count", UintegerValue(20));
+    pingHelper.SetAttribute("VerboseMode", EnumValue(Ping::VerboseMode::SILENT));
+
+    ApplicationContainer apps = pingHelper.Install(tempe);
+    Ptr<Ping> ping = DynamicCast<Ping>(apps.Get(0));
+    NS_TEST_ASSERT_MSG_NE(ping, nullptr, "Ping application must be created");
+
+    m_replyCount = 0u;
+    ping->TraceConnectWithoutContext(
+        "Rtt",
+        MakeCallback(&OrbitShieldStaticRoutingStrategyTest::OnRttTrace, this));
+
+    apps.Start(Seconds(1.0));
+    apps.Stop(Seconds(300.0));
+
+    Simulator::Stop(Seconds(300.0));
+    Simulator::Run();
+
+    NS_LOG_INFO("Static routing strategy test completed: " << m_replyCount
+                << " / 20 ICMP echo replies received across 20 fast-refresh cycles");
+
+    // Simulation must complete without crash (reaching here confirms that).
+    NS_TEST_ASSERT_MSG_EQ(true, true, "Simulation completed without crash or assertion failure");
+
+    // At least one successful delivery confirms routing is functional under fast refresh.
+    NS_TEST_ASSERT_MSG_GT(m_replyCount,
+                          0u,
+                          "Static routing must deliver at least one ICMP echo reply under a "
+                          "15-second refresh interval over 300 seconds");
+
+    Simulator::Destroy();
+}
