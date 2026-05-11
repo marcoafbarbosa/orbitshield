@@ -297,7 +297,7 @@ OrbitShieldIridiumTopologyTest::DoRun()
                           "Expected satellites to be loaded from the TLE file referenced in YAML");
     NS_LOG_INFO("Total satellites loaded: " << satellites.size());
 
-    // Verify ground stations - this is the key part of Phase 1.1
+    // Verify ground stations loaded from the YAML dataset.
     // The ground stations are defined in the YAML and should always be discoverable
     const auto& groundStations = constellation->GetGroundStations();
     NS_TEST_EXPECT_MSG_EQ(groundStations.size(),
@@ -901,12 +901,11 @@ OrbitShieldTempeFairbanksPingPathTest::DoRun()
 }
 
 // ---------------------------------------------------------------------------
-// OrbitShieldMultiGroundStationRoutingTest  (Milestone 5, Phase 5.1)
+// OrbitShieldMultiGroundStationRoutingTest
 // ---------------------------------------------------------------------------
 
 OrbitShieldMultiGroundStationRoutingTest::OrbitShieldMultiGroundStationRoutingTest()
-    : TestCase(
-          "Test multi-GS routing across all Iridium ground station pairs (Milestone 5 Phase 5.1)")
+    : TestCase("Test multi-GS routing across all Iridium ground station pairs")
 {
 }
 
@@ -1068,12 +1067,11 @@ OrbitShieldMultiGroundStationRoutingTest::DoRun()
 }
 
 // ---------------------------------------------------------------------------
-// OrbitShieldStaticRoutingStrategyTest  (Milestone 5, Phase 5.2)
+// OrbitShieldStaticRoutingStrategyTest
 // ---------------------------------------------------------------------------
 
 OrbitShieldStaticRoutingStrategyTest::OrbitShieldStaticRoutingStrategyTest()
-    : TestCase(
-          "Test static routing strategy robustness under fast topology refresh (Phase 5.2)")
+    : TestCase("Test static routing strategy robustness under fast topology refresh")
 {
 }
 
