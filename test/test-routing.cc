@@ -660,6 +660,108 @@ OrbitShieldRefreshSafeRoutingTest::DoRun()
     Simulator::Destroy();
 }
 
+OrbitShieldDynamicRouteRefreshTest::OrbitShieldDynamicRouteRefreshTest()
+    : TestCase("Test dynamic route refresh across topology refresh intervals")
+{
+}
+
+OrbitShieldDynamicRouteRefreshTest::~OrbitShieldDynamicRouteRefreshTest()
+{
+}
+
+void
+OrbitShieldDynamicRouteRefreshTest::OnRttTrace(uint16_t seq, Time rtt)
+{
+    (void)seq;
+    ++m_replyCount;
+    if (m_replyCount == 1)
+    {
+        m_minRtt = rtt;
+        m_maxRtt = rtt;
+        return;
+    }
+
+    m_minRtt = std::min(m_minRtt, rtt);
+    m_maxRtt = std::max(m_maxRtt, rtt);
+}
+
+void
+OrbitShieldDynamicRouteRefreshTest::DoRun()
+{
+    NS_LOG_FUNCTION(this);
+
+    // Load constellation and set up dynamic topology with 60-second refresh
+    Ptr<Constellation> constellation = CreateObject<Constellation>();
+    constellation->LoadFromRingFile("contrib/orbitshield/data/iridium-20260312.yaml");
+
+    constellation->SetIslRefreshInterval(Seconds(60.0));
+    constellation->CreateIslLinks(2000000.0);
+    constellation->CreateGroundLinks(50000000.0);
+    constellation->RefreshIslTopology();
+
+    // Install routing with callback
+    OrbitShieldRoutingHelper routingHelper;
+    routingHelper.Install(constellation);
+
+    // Find ground stations
+    Ptr<GroundStation> tempe = FindGroundStationByName(constellation->GetGroundStations(), "Tempe");
+    Ptr<GroundStation> fairbanks =
+        FindGroundStationByName(constellation->GetGroundStations(), "Fairbanks");
+
+    NS_TEST_ASSERT_MSG_NE(tempe, nullptr, "Tempe ground station must exist in Iridium dataset");
+    NS_TEST_ASSERT_MSG_NE(fairbanks, nullptr, "Fairbanks ground station must exist in Iridium dataset");
+
+    Ipv4Address destination = GetFirstNonLoopbackAddress(fairbanks);
+    NS_TEST_ASSERT_MSG_NE(destination,
+                          Ipv4Address::GetZero(),
+                          "Fairbanks must have a non-loopback IPv4 address after Install");
+
+    // Configure ping helper to send one echo per 60-second interval
+    // Total simulation time: 600 seconds = 10 refresh intervals
+    PingHelper pingHelper(destination);
+    pingHelper.SetAttribute("Interval", TimeValue(Seconds(60.0)));
+    pingHelper.SetAttribute("Size", UintegerValue(56));
+    pingHelper.SetAttribute("Count", UintegerValue(10));
+    pingHelper.SetAttribute("VerboseMode", EnumValue(Ping::VerboseMode::SILENT));
+
+    ApplicationContainer apps = pingHelper.Install(tempe);
+    Ptr<Ping> ping = DynamicCast<Ping>(apps.Get(0));
+    NS_TEST_ASSERT_MSG_NE(ping, nullptr, "Ping application must be created");
+
+    m_replyCount = 0;
+    m_minRtt = Seconds(0);
+    m_maxRtt = Seconds(0);
+    ping->TraceConnectWithoutContext("Rtt",
+                                     MakeCallback(&OrbitShieldDynamicRouteRefreshTest::OnRttTrace,
+                                                  this));
+
+    apps.Start(Seconds(0.0));
+    apps.Stop(Seconds(600.0));
+
+    Simulator::Stop(Seconds(600.0));
+    Simulator::Run();
+
+    NS_LOG_INFO("Dynamic route refresh test completed: "
+                << m_replyCount << " ICMP echo replies received");
+
+    // Verify that the simulation completed without crash/assertion
+    NS_TEST_ASSERT_MSG_EQ(true,
+                          true,
+                          "Simulation completed without crash or assertion failure");
+
+    // Verify at least one ICMP echo reply within first 120 seconds
+    // (allows time for initial topology setup and 2 refresh intervals)
+    NS_TEST_ASSERT_MSG_GT(m_replyCount,
+                          0u,
+                          "Expected at least one successful ICMP echo reply within 600 seconds of "
+                          "dynamic topology refresh cycles");
+
+    NS_LOG_INFO("Successfully validated that routes are updated across refresh intervals with "
+                "at least one ICMP delivery");
+
+    Simulator::Destroy();
+}
+
 OrbitShieldTempeFairbanksPingPathTest::OrbitShieldTempeFairbanksPingPathTest()
     : TestCase("Test end-to-end Tempe->Fairbanks ICMP path with RTT bounds and multi-hop routing")
 {

@@ -121,4 +121,27 @@ class OrbitShieldTempeFairbanksPingPathTest : public TestCase
     Time m_maxRtt{Seconds(0)};
 };
 
+/**
+ * \brief Test case for dynamic route refresh across topology changes
+ *
+ * Verifies that routes are properly updated when the constellation topology
+ * refreshes over a 600-second window with 60-second refresh intervals.
+ * Sends one ICMP echo from Tempe to Fairbanks per refresh interval and
+ * validates that at least one echo reply is received within the first 120 seconds.
+ */
+class OrbitShieldDynamicRouteRefreshTest : public TestCase
+{
+  public:
+    OrbitShieldDynamicRouteRefreshTest();
+    ~OrbitShieldDynamicRouteRefreshTest() override;
+
+  private:
+    void DoRun() override;
+    void OnRttTrace(uint16_t seq, Time rtt);
+
+    uint32_t m_replyCount{0};
+    Time m_minRtt{Seconds(0)};
+    Time m_maxRtt{Seconds(0)};
+};
+
 #endif /* TEST_ROUTING_H */

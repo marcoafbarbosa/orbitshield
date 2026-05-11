@@ -564,3 +564,29 @@ OrbitShield is distributed under GNU GPL v2 (see top-level ns-3 licensing files)
 ## Authors
 
 Developed by Marco A. F. Barbosa.
+
+## Topology Refresh Integration (Milestone 4)
+
+### Current Status
+
+Milestone 4 implements dynamic route updates in response to topology changes:
+
+- **Phase 4.1** (COMPLETED): Route update callback integration
+  - `Constellation::RefreshIslTopology()` invokes `m_routeUpdateCallback` after rebuilding ISL and ground-link topologies
+  - `Constellation::SetRouteUpdateCallback()` allows registering a callback to be invoked on topology changes
+  - `OrbitShieldRoutingHelper::Install()` registers the callback and performs initial route computation
+  - `OrbitShieldRoutingHelper::RecomputeRoutes()` implements shortest-hop Dijkstra over all ISL+GSL links, clearing and rebuilding static routes on all nodes
+  - Routes are recomputed during topology refresh events to maintain connectivity as satellite positions change
+
+- **Phase 4.2** (COMPLETED): Dynamic behavior validation
+  - Added `OrbitShieldDynamicRouteRefreshTest` for extended validation:
+    - Runs 600-second simulation with 60-second topology refresh interval (10 total refreshes)
+    - Sends one ICMP echo from Tempe to Fairbanks per refresh interval (total 10 pings)
+    - Verifies at least one echo reply is received during the extended window
+    - Confirms simulation completes without crash or assertion failure despite repeated topology changes
+    - Records and logs ICMP delivery statistics across refresh intervals (graceful degradation through topology changes)
+
+### Limitations & Future Work
+
+- Milestone 5 will add complex multi-ground-station scenarios and delivery-ratio validation
+- Consider future migration to reactive protocols (AODV) if required for specific deployment scenarios
