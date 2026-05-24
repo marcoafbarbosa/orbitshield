@@ -7,12 +7,10 @@
 
 #include "ns3/test.h"
 
-using namespace ns3;
-
 /**
  * \brief Test case for Constellation class
  */
-class ConstellationTestCase : public TestCase
+class ConstellationTestCase : public ns3::TestCase
 {
   public:
     ConstellationTestCase();

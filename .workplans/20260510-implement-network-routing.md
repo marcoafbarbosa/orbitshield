@@ -57,7 +57,7 @@ Follow the current OrbitShield design and ns-3 coding style:
 - Milestone 3: IPv4 stack and simple ping path — **Implemented** (Phases 3.1, 3.11, and 3.2 implemented)
 - Milestone 4: Topology refresh integration — **Implemented**
 - Milestone 5: Complex routing behavior — **Implemented**
-- Milestone 6: Cleanup and documentation — **Implemented**
+- Milestone 6: Cleanup and documentation — **In progress** (Phase 6.1 implemented; Phase 6.2 pending)
 
 ## Milestone 1: API Scaffolding and Test Setup
 
@@ -270,12 +270,21 @@ Follow the current OrbitShield design and ns-3 coding style:
 
 ### Phase 6.1: Code cleanup and consolidation
 
-- Status: **Not implemented**
+- Status: **Implemented**
 - Goal: Remove temporary mocks and clarify any API rough edges.
 - Work:
   - Refactor helper functions into `model/` source files as needed.
   - Keep public API names simple and consistent with existing OrbitShield conventions.
   - Ensure `Constellation` remains the central manager for topology discovery.
+- Date: `2026-05-24`
+- Commit: `N/A`
+- Commands run:
+  - `cd /home/marco/ns-3-dev && ./ns3 build`
+  - `cd /home/marco/ns-3-dev && ./ns3 run test-runner -- --suite=orbitshield`
+- Result summary:
+  - Removed namespace pollution from OrbitShield test headers by eliminating header-level `using namespace ns3;` and using explicit `ns3::` qualification for public declarations.
+  - Added/expanded Doxygen comments for public APIs in `model/ground-station.h`, `model/satellite-link.h`, and YAML/ring metadata methods in `model/constellation.h`.
+  - Validation result: `PASS orbitshield` after cleanup changes.
 
 ### Phase 6.2: Documentation and README updates
 
@@ -570,8 +579,7 @@ This schema is required for reliable autopilot continuation across multiple runs
 
 ## Which Milestone/Phase to Do Next
 
-- The next work item is **Milestone 6, Phase 6.1**: code cleanup and consolidation.
-- After that, proceed to **Milestone 6, Phase 6.2**: final documentation consistency pass.
+- The next work item is **Milestone 6, Phase 6.2**: final documentation consistency pass.
 
 ---
 

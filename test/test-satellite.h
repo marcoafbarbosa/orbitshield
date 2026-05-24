@@ -7,12 +7,10 @@
 
 #include "ns3/test.h"
 
-using namespace ns3;
-
 /**
  * \brief Test case for Satellite class
  */
-class SatelliteTestCase : public TestCase
+class SatelliteTestCase : public ns3::TestCase
 {
   public:
     SatelliteTestCase();

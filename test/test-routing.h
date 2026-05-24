@@ -8,12 +8,10 @@
 #include "ns3/test.h"
 #include "ns3/nstime.h"
 
-using namespace ns3;
-
 /**
  * \brief Test case for OrbitShield Routing implementation
  */
-class OrbitShieldIridiumTopologyTest : public TestCase
+class OrbitShieldIridiumTopologyTest : public ns3::TestCase
 {
   public:
     OrbitShieldIridiumTopologyTest();
@@ -26,7 +24,7 @@ class OrbitShieldIridiumTopologyTest : public TestCase
 /**
  * \brief Test case for OrbitShield routing helper API
  */
-class OrbitShieldRoutingHelperTest : public TestCase
+class OrbitShieldRoutingHelperTest : public ns3::TestCase
 {
   public:
     OrbitShieldRoutingHelperTest();
@@ -39,7 +37,7 @@ class OrbitShieldRoutingHelperTest : public TestCase
 /**
  * \brief Test case for multi-link SatelliteNetDevice support
  */
-class OrbitShieldMultiLinkDeviceTest : public TestCase
+class OrbitShieldMultiLinkDeviceTest : public ns3::TestCase
 {
   public:
     OrbitShieldMultiLinkDeviceTest();
@@ -52,7 +50,7 @@ class OrbitShieldMultiLinkDeviceTest : public TestCase
 /**
  * \brief Test case for ground station multi-link support
  */
-class OrbitShieldGroundStationMultiLinkTest : public TestCase
+class OrbitShieldGroundStationMultiLinkTest : public ns3::TestCase
 {
   public:
     OrbitShieldGroundStationMultiLinkTest();
@@ -70,7 +68,7 @@ class OrbitShieldGroundStationMultiLinkTest : public TestCase
  * starting at 10.0.0.0, with ISLs allocated first and GSLs continuing
  * from the next block with no gap or offset.
  */
-class OrbitShieldIpv4AddressAssignmentTest : public TestCase
+class OrbitShieldIpv4AddressAssignmentTest : public ns3::TestCase
 {
   public:
     OrbitShieldIpv4AddressAssignmentTest();
@@ -86,7 +84,7 @@ class OrbitShieldIpv4AddressAssignmentTest : public TestCase
  * Verifies that route recomputation is triggered across topology refreshes
  * and that at least one ICMP echo reply is received during a refresh window.
  */
-class OrbitShieldRefreshSafeRoutingTest : public TestCase
+class OrbitShieldRefreshSafeRoutingTest : public ns3::TestCase
 {
   public:
     OrbitShieldRefreshSafeRoutingTest();
@@ -94,7 +92,7 @@ class OrbitShieldRefreshSafeRoutingTest : public TestCase
 
   private:
     void DoRun() override;
-    void OnRttTrace(uint16_t seq, Time rtt);
+    void OnRttTrace(uint16_t seq, ns3::Time rtt);
 
     uint32_t m_rttCount{0};
 };
@@ -106,7 +104,7 @@ class OrbitShieldRefreshSafeRoutingTest : public TestCase
  * bounds RTT to <= 500 ms, and confirms the route is multi-hop through
  * the satellite mesh.
  */
-class OrbitShieldTempeFairbanksPingPathTest : public TestCase
+class OrbitShieldTempeFairbanksPingPathTest : public ns3::TestCase
 {
   public:
     OrbitShieldTempeFairbanksPingPathTest();
@@ -114,11 +112,11 @@ class OrbitShieldTempeFairbanksPingPathTest : public TestCase
 
   private:
     void DoRun() override;
-    void OnRttTrace(uint16_t seq, Time rtt);
+    void OnRttTrace(uint16_t seq, ns3::Time rtt);
 
     uint32_t m_replyCount{0};
-    Time m_minRtt{Seconds(0)};
-    Time m_maxRtt{Seconds(0)};
+    ns3::Time m_minRtt{ns3::Seconds(0)};
+    ns3::Time m_maxRtt{ns3::Seconds(0)};
 };
 
 /**
@@ -129,7 +127,7 @@ class OrbitShieldTempeFairbanksPingPathTest : public TestCase
  * Sends one ICMP echo from Tempe to Fairbanks per refresh interval and
  * validates that at least one echo reply is received within the first 120 seconds.
  */
-class OrbitShieldDynamicRouteRefreshTest : public TestCase
+class OrbitShieldDynamicRouteRefreshTest : public ns3::TestCase
 {
   public:
     OrbitShieldDynamicRouteRefreshTest();
@@ -137,11 +135,11 @@ class OrbitShieldDynamicRouteRefreshTest : public TestCase
 
   private:
     void DoRun() override;
-    void OnRttTrace(uint16_t seq, Time rtt);
+    void OnRttTrace(uint16_t seq, ns3::Time rtt);
 
     uint32_t m_replyCount{0};
-    Time m_minRtt{Seconds(0)};
-    Time m_maxRtt{Seconds(0)};
+    ns3::Time m_minRtt{ns3::Seconds(0)};
+    ns3::Time m_maxRtt{ns3::Seconds(0)};
 };
 
 /**
@@ -158,7 +156,7 @@ class OrbitShieldDynamicRouteRefreshTest : public TestCase
  * - At least 3 distinct GS pairs achieve 100% delivery.
  * - Simulation completes without crash or assertion failure.
  */
-class OrbitShieldMultiGroundStationRoutingTest : public TestCase
+class OrbitShieldMultiGroundStationRoutingTest : public ns3::TestCase
 {
   public:
     OrbitShieldMultiGroundStationRoutingTest();
@@ -175,7 +173,7 @@ class OrbitShieldMultiGroundStationRoutingTest : public TestCase
  * occur frequently (every 15 seconds over 300 seconds = 20 recomputations).
  * Validates no crash, assertion failure, or routing breakdown under rapid refresh.
  */
-class OrbitShieldStaticRoutingStrategyTest : public TestCase
+class OrbitShieldStaticRoutingStrategyTest : public ns3::TestCase
 {
   public:
     OrbitShieldStaticRoutingStrategyTest();
@@ -183,7 +181,7 @@ class OrbitShieldStaticRoutingStrategyTest : public TestCase
 
   private:
     void DoRun() override;
-    void OnRttTrace(uint16_t seq, Time rtt);
+    void OnRttTrace(uint16_t seq, ns3::Time rtt);
 
     uint32_t m_replyCount{0};
 };
