@@ -57,7 +57,7 @@ Follow the current OrbitShield design and ns-3 coding style:
 - Milestone 3: IPv4 stack and simple ping path — **Implemented** (Phases 3.1, 3.11, and 3.2 implemented)
 - Milestone 4: Topology refresh integration — **Implemented**
 - Milestone 5: Complex routing behavior — **Implemented**
-- Milestone 6: Cleanup and documentation — **In progress** (Phase 6.1 implemented; Phase 6.2 pending)
+- Milestone 6: Cleanup and documentation — **Implemented**
 
 ## Milestone 1: API Scaffolding and Test Setup
 
@@ -288,12 +288,21 @@ Follow the current OrbitShield design and ns-3 coding style:
 
 ### Phase 6.2: Documentation and README updates
 
-- Status: **Not implemented**
+- Status: **Implemented**
 - Goal: Perform a final documentation consistency pass after incremental milestone updates.
 - Work:
   - Consolidate and normalize README content that was updated milestone-by-milestone.
   - Verify README reflects final APIs, test commands, topology behavior, and known limitations.
   - Keep `contrib/orbitshield/data/iridium-20260312.yaml` documented as the canonical test dataset.
+- Date: `2026-05-24`
+- Commit: `N/A`
+- Commands run:
+  - `cd /home/marco/ns-3-dev && ./ns3 build`
+  - `cd /home/marco/ns-3-dev && ./ns3 run test-runner -- --suite=orbitshield`
+- Result summary:
+  - Normalized README tooling documentation to match the current `contrib/orbitshield/tools/` contents, including utility scripts and the renderer map asset.
+  - Fixed stale usage text in `tools/generate-constellation-image.sh` so documented options match actual CLI arguments.
+  - Validation result: `PASS orbitshield` after documentation consistency changes.
 
 ## Test-Driven Implementation Strategy
 
@@ -579,7 +588,7 @@ This schema is required for reliable autopilot continuation across multiple runs
 
 ## Which Milestone/Phase to Do Next
 
-- The next work item is **Milestone 6, Phase 6.2**: final documentation consistency pass.
+- All planned milestones/phases in this workplan are implemented.
 
 ---
 

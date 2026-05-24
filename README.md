@@ -177,6 +177,8 @@ All tests are in the `orbitshield` suite and can be run with:
 - `orbitshield-isl-visualizer` (C++ executable)
 - `render-isl-worldmap.py` (Python DOT-to-world-map renderer)
 - `generate-constellation-image.sh` (end-to-end frame/image/GIF generation helper)
+- `analyze_constellation_rings.py` (ring metadata diagnostics and sanity checks)
+- `convert_tle_to_csv.py` (TLE conversion utility for downstream analysis)
 
 ## Module Structure
 
@@ -205,6 +207,9 @@ contrib/orbitshield/
 |  |- orbitshield-load-from-yaml.cc
 |  |- orbitshield-dynamic-topology.cc
 |- tools/
+|  |- .ne_110m_land.geojson
+|  |- analyze_constellation_rings.py
+|  |- convert_tle_to_csv.py
 |  |- isl-visualizer.cc
 |  |- render-isl-worldmap.py
 |  |- generate-constellation-image.sh

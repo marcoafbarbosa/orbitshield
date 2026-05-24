@@ -30,7 +30,7 @@
 #
 # Must be run from the ns-3 root directory, e.g.:
 #   cd /path/to/ns-3-dev
-#   ./contrib/orbitshield/tools/generate-constellation-image.sh --maxRange=5000
+#   ./contrib/orbitshield/tools/generate-constellation-image.sh --islMaxRange=5000 --groundMaxRange=3000
 
 set -euo pipefail
 
