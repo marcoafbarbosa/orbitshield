@@ -5,6 +5,85 @@
 #include "satellite-net-device.h"
 #include "ns3/log.h"
 #include "ns3/simulator.h"
+#include "ns3/ipv4.h"
+#include "ns3/ipv4-header.h"
+#include "ns3/ipv4-routing-table-entry.h"
+#include "ns3/ipv4-static-routing.h"
+#include "ns3/ipv4-static-routing-helper.h"
+
+namespace
+{
+
+ns3::Ipv4Address
+ResolveGatewayForPacket(ns3::Ptr<ns3::Node> node, ns3::Ptr<const ns3::Packet> packet)
+{
+    if (!node || !packet)
+    {
+        return ns3::Ipv4Address::GetZero();
+    }
+
+    ns3::Ipv4Header ipHeader;
+    if (!packet->PeekHeader(ipHeader))
+    {
+        return ns3::Ipv4Address::GetZero();
+    }
+
+    ns3::Ptr<ns3::Ipv4> ipv4 = node->GetObject<ns3::Ipv4>();
+    if (!ipv4)
+    {
+        return ns3::Ipv4Address::GetZero();
+    }
+
+    ns3::Ipv4StaticRoutingHelper helper;
+    ns3::Ptr<ns3::Ipv4StaticRouting> staticRouting = helper.GetStaticRouting(ipv4);
+    if (!staticRouting)
+    {
+        return ns3::Ipv4Address::GetZero();
+    }
+
+    const ns3::Ipv4Address destination = ipHeader.GetDestination();
+    for (uint32_t i = 0; i < staticRouting->GetNRoutes(); ++i)
+    {
+        ns3::Ipv4RoutingTableEntry route = staticRouting->GetRoute(i);
+        if (route.GetDest() == destination)
+        {
+            return route.GetGateway();
+        }
+    }
+
+    return ns3::Ipv4Address::GetZero();
+}
+
+bool
+PeerHasIpv4Address(ns3::Ptr<ns3::SatelliteNetDevice> peer, const ns3::Ipv4Address& address)
+{
+    if (!peer || address == ns3::Ipv4Address::GetZero())
+    {
+        return false;
+    }
+
+    ns3::Ptr<ns3::Node> node = peer->GetNode();
+    ns3::Ptr<ns3::Ipv4> ipv4 = node ? node->GetObject<ns3::Ipv4>() : nullptr;
+    if (!ipv4)
+    {
+        return false;
+    }
+
+    for (uint32_t iface = 1; iface < ipv4->GetNInterfaces(); ++iface)
+    {
+        for (uint32_t addrIdx = 0; addrIdx < ipv4->GetNAddresses(iface); ++addrIdx)
+        {
+            if (ipv4->GetAddress(iface, addrIdx).GetLocal() == address)
+            {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+} // namespace
 
 namespace ns3
 {
@@ -37,16 +116,37 @@ SatelliteNetDevice::~SatelliteNetDevice()
 }
 
 void
+SatelliteNetDevice::AddLink(Ptr<SatelliteLink> link)
+{
+    NS_LOG_FUNCTION(this << link);
+    m_links.push_back(link);
+}
+
+void
 SatelliteNetDevice::SetLink(Ptr<SatelliteLink> link)
 {
     NS_LOG_FUNCTION(this << link);
-    m_link = link;
+    m_links.clear();
+    if (link)
+    {
+        m_links.push_back(link);
+    }
 }
 
 Ptr<SatelliteLink>
 SatelliteNetDevice::GetSatelliteLink() const
 {
-    return m_link;
+    if (m_links.empty())
+    {
+        return nullptr;
+    }
+    return m_links[0];
+}
+
+const std::vector<Ptr<SatelliteLink>>&
+SatelliteNetDevice::GetLinks() const
+{
+    return m_links;
 }
 
 bool
@@ -78,7 +178,11 @@ SatelliteNetDevice::GetIfIndex() const
 Ptr<Channel>
 SatelliteNetDevice::GetChannel() const
 {
-    return m_link;
+    if (m_links.empty())
+    {
+        return nullptr;
+    }
+    return m_links[0];
 }
 
 void
@@ -121,31 +225,35 @@ SatelliteNetDevice::AddLinkChangeCallback(Callback<void> callback)
 bool
 SatelliteNetDevice::IsBroadcast() const
 {
-    return true;
+    return false;
 }
 
 Address
 SatelliteNetDevice::GetBroadcast() const
 {
-    return Mac48Address("ff:ff:ff:ff:ff:ff");
+    // IPv4 interface send paths may query broadcast even for point-to-point devices.
+    // Return the standard MAC broadcast address for compatibility.
+    return Mac48Address::GetBroadcast();
 }
 
 bool
 SatelliteNetDevice::IsMulticast() const
 {
-    return true;
+    return false;
 }
 
 Address
 SatelliteNetDevice::GetMulticast(Ipv4Address multicastGroup) const
 {
-    return Mac48Address::GetMulticast(multicastGroup);
+    NS_ASSERT_MSG(false, "Point-to-point devices do not support multicast");
+    return Address();
 }
 
 Address
 SatelliteNetDevice::GetMulticast(Ipv6Address addr) const
 {
-    return Mac48Address::GetMulticast(addr);
+    NS_ASSERT_MSG(false, "Point-to-point devices do not support multicast");
+    return Address();
 }
 
 bool
@@ -157,19 +265,56 @@ SatelliteNetDevice::IsBridge() const
 bool
 SatelliteNetDevice::IsPointToPoint() const
 {
-    return false;
+    return true;
 }
 
 bool
 SatelliteNetDevice::Send(Ptr<Packet> packet, const Address& dest, uint16_t protocolNumber)
 {
     NS_LOG_FUNCTION(this << packet << dest << protocolNumber);
-    if (!m_link)
+    if (m_links.empty())
     {
         return false;
     }
 
-    return m_link->Send(this, packet, dest, protocolNumber, m_address);
+    const bool isBroadcast = (dest == Mac48Address::GetBroadcast());
+    const Ipv4Address gateway = isBroadcast ? ResolveGatewayForPacket(m_node, packet)
+                                            : Ipv4Address::GetZero();
+    for (const auto& link : m_links)
+    {
+        if (!link)
+        {
+            continue;
+        }
+
+        Ptr<SatelliteNetDevice> peer = nullptr;
+        Ptr<SatelliteNetDevice> dev0 = DynamicCast<SatelliteNetDevice>(link->GetDevice(0));
+        Ptr<SatelliteNetDevice> dev1 = DynamicCast<SatelliteNetDevice>(link->GetDevice(1));
+        if (dev0 == this)
+        {
+            peer = dev1;
+        }
+        else if (dev1 == this)
+        {
+            peer = dev0;
+        }
+        if (!peer)
+        {
+            continue;
+        }
+
+        if (isBroadcast && gateway != Ipv4Address::GetZero() && !PeerHasIpv4Address(peer, gateway))
+        {
+            continue;
+        }
+
+        const Address resolvedDest = isBroadcast ? peer->GetAddress() : dest;
+        if (link->Send(this, packet, resolvedDest, protocolNumber, m_address))
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool
@@ -179,12 +324,49 @@ SatelliteNetDevice::SendFrom(Ptr<Packet> packet,
                               uint16_t protocolNumber)
 {
     NS_LOG_FUNCTION(this << packet << source << dest << protocolNumber);
-    if (!m_link)
+    if (m_links.empty())
     {
         return false;
     }
 
-    return m_link->Send(this, packet, dest, protocolNumber, source);
+    const bool isBroadcast = (dest == Mac48Address::GetBroadcast());
+    const Ipv4Address gateway = isBroadcast ? ResolveGatewayForPacket(m_node, packet)
+                                            : Ipv4Address::GetZero();
+    for (const auto& link : m_links)
+    {
+        if (!link)
+        {
+            continue;
+        }
+
+        Ptr<SatelliteNetDevice> peer = nullptr;
+        Ptr<SatelliteNetDevice> dev0 = DynamicCast<SatelliteNetDevice>(link->GetDevice(0));
+        Ptr<SatelliteNetDevice> dev1 = DynamicCast<SatelliteNetDevice>(link->GetDevice(1));
+        if (dev0 == this)
+        {
+            peer = dev1;
+        }
+        else if (dev1 == this)
+        {
+            peer = dev0;
+        }
+        if (!peer)
+        {
+            continue;
+        }
+
+        if (isBroadcast && gateway != Ipv4Address::GetZero() && !PeerHasIpv4Address(peer, gateway))
+        {
+            continue;
+        }
+
+        const Address resolvedDest = isBroadcast ? peer->GetAddress() : dest;
+        if (link->Send(this, packet, resolvedDest, protocolNumber, source))
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 Ptr<Node>
@@ -202,7 +384,7 @@ SatelliteNetDevice::SetNode(Ptr<Node> node)
 bool
 SatelliteNetDevice::NeedsArp() const
 {
-    return true;
+    return false;
 }
 
 void

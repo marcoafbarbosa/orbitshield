@@ -990,6 +990,18 @@ Constellation::RefreshIslTopology()
                                                    << "s, created " << m_currentIsls.size()
                                                    << " ISLs and " << m_currentGroundLinks.size()
                                                    << " ground links");
+
+    if (!m_routeUpdateCallback.IsNull())
+    {
+        m_routeUpdateCallback(this);
+    }
+}
+
+void
+Constellation::SetRouteUpdateCallback(Callback<void, Ptr<Constellation>> cb)
+{
+    NS_LOG_FUNCTION(this);
+    m_routeUpdateCallback = cb;
 }
 
 void

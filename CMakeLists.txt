@@ -25,6 +25,7 @@ build_lib(
     model/constellation.cc
     model/ground-station.cc
     model/isl-propagation-delay-model.cc
+    model/orbitshield-routing-helper.cc
     model/orbitshield-utils.cc
     model/satellite-link.cc
     model/satellite-mobility-model.cc
@@ -34,16 +35,18 @@ build_lib(
     model/constellation.h
     model/ground-station.h
     model/isl-propagation-delay-model.h
+    model/orbitshield-routing-helper.h
     model/orbitshield-utils.h
     model/satellite-link.h
     model/satellite-mobility-model.h
     model/satellite-net-device.h
     model/satellite.h
-  LIBRARIES_TO_LINK ${libbuildings} ${libcore} ${libnetwork} ${libmobility} ${libpropagation} perturb
+  LIBRARIES_TO_LINK ${libbuildings} ${libcore} ${libnetwork} ${libmobility} ${libpropagation} ${libinternet} ${libapplications} perturb
   TEST_SOURCES
     test/test-constellation.cc
     test/test-isl.cc
     test/test-satellite.cc
+    test/test-routing.cc
     test/test-orbitshield.cc
 )
 

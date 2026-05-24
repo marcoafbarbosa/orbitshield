@@ -37,8 +37,8 @@ SatelliteLink::SatelliteLink(Ptr<SatelliteNetDevice> a, Ptr<SatelliteNetDevice> 
     : m_deviceA(a), m_deviceB(b), m_maxRange(1000000.0), m_delayModel(CreateObject<IslPropagationDelayModel>())
 {
     NS_LOG_FUNCTION(this << a << b);
-    if (a) a->SetLink(this);
-    if (b) b->SetLink(this);
+    if (a) a->AddLink(this);
+    if (b) b->AddLink(this);
 }
 
 SatelliteLink::~SatelliteLink()

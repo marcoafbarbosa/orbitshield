@@ -93,16 +93,68 @@ class Constellation : public Object
      */
     std::string ExportIslAsDot(const std::vector<Ptr<SatelliteLink>>& links, bool activeOnly = true) const;
 
-    // YAML constellation description metadata
+    /**
+     * \brief Load constellation metadata (rings and optional ground stations) from YAML.
+     *
+     * If the YAML contains a \c tleFile entry, satellites are loaded from that file
+     * relative to the YAML directory.
+     *
+     * \param filename Path to YAML ring metadata file.
+     */
     void LoadFromRingFile(const std::string& filename);
+
+    /**
+     * \brief Load constellation metadata from a YAML stream.
+     *
+     * \param file Input YAML stream.
+     * \param basePath Optional base path used to resolve relative \c tleFile entries.
+     */
     void LoadFromRingFile(std::istream& file, const std::string& basePath = "");
 
+    /**
+     * \brief Get the number of logical rings in this constellation metadata.
+     * \return Ring count.
+     */
     uint32_t GetRingCount() const;
+
+    /**
+     * \brief Get the configured constellation name.
+     * \return Constellation name string.
+     */
     std::string GetConstellationName() const;
+
+    /**
+     * \brief Get all configured ground stations.
+     * \return Vector of ground-station pointers.
+     */
     const std::vector<Ptr<GroundStation>>& GetGroundStations() const;
+
+    /**
+     * \brief Look up which ring contains a satellite by name.
+     * \param satName Satellite name.
+     * \return Ring ID when known, otherwise empty optional.
+     */
     std::optional<uint32_t> GetRingOfSatellite(const std::string& satName) const;
+
+    /**
+     * \brief Get satellites belonging to a specific ring.
+     * \param ringId Ring identifier.
+     * \return Satellites in ring \p ringId, or an empty vector when missing.
+     */
     const std::vector<Ptr<Satellite>>& GetSatellitesInRing(uint32_t ringId) const;
+
+    /**
+     * \brief Get satellites in the previous ring (modulo ring count).
+     * \param ringId Reference ring identifier.
+     * \return Satellites in previous ring, or empty vector when no rings exist.
+     */
     const std::vector<Ptr<Satellite>>& GetPreviousRingSatellites(uint32_t ringId) const;
+
+    /**
+     * \brief Get satellites in the next ring (modulo ring count).
+     * \param ringId Reference ring identifier.
+     * \return Satellites in next ring, or empty vector when no rings exist.
+     */
     const std::vector<Ptr<Satellite>>& GetNextRingSatellites(uint32_t ringId) const;
 
     /**
@@ -135,6 +187,15 @@ class Constellation : public Object
      */
     void RefreshIslTopology();
 
+    /**
+     * \brief Set a callback to be invoked when routes should be updated
+     * 
+     * The callback will be called with a pointer to this constellation as the argument.
+     * 
+     * \param cb The callback to invoke on route update events
+     */
+    void SetRouteUpdateCallback(Callback<void, Ptr<Constellation>> cb);
+
   private:
     std::vector<Ptr<Satellite>> m_satellites; //!< Collection of satellites in the constellation
     perturb::JulianDate m_simulationStartJD;  //!< Global simulation start time
@@ -153,6 +214,7 @@ class Constellation : public Object
     std::vector<Ptr<SatelliteLink>> m_currentGroundLinks; //!< Cached satellite-ground topology
     double m_islMaxRange{0.0};                 //!< Max range for ISL creation (cached)
     double m_groundMaxRange{0.0};              //!< Max range for ground-link creation (cached)
+    Callback<void, Ptr<Constellation>> m_routeUpdateCallback; //!< Callback for route updates
 
     // Helper methods for ISL creation
     double CalculateSatelliteDistance(Ptr<Satellite> satA, Ptr<Satellite> satB);
