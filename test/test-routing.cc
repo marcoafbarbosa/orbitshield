@@ -315,6 +315,19 @@ AttachFixedMobility(Ptr<Node> node, const Vector& position)
     node->AggregateObject(mobility);
 }
 
+std::vector<std::string>
+ReadTextLines(const std::string& path)
+{
+    std::vector<std::string> lines;
+    std::ifstream input(path);
+    std::string line;
+    while (std::getline(input, line))
+    {
+        lines.push_back(line);
+    }
+    return lines;
+}
+
 uint32_t
 ComputeStaticHostRouteHopCount(Ptr<Node> source,
                                Ptr<Node> destinationNode,
@@ -755,6 +768,146 @@ OrbitShieldIpv4AddressAssignmentTest::DoRun()
 
     NS_LOG_INFO("Sequential /30 allocation verified: " << totalLinks << " link(s), all blocks correct");
     Simulator::Destroy();
+}
+
+OrbitShieldScenario3TelemetryTest::OrbitShieldScenario3TelemetryTest()
+    : TestCase("OrbitShieldScenario3TelemetryTest")
+{
+}
+
+OrbitShieldScenario3TelemetryTest::~OrbitShieldScenario3TelemetryTest()
+{
+}
+
+void
+OrbitShieldScenario3TelemetryTest::DoRun()
+{
+    OrbitShieldScenario3Telemetry telemetry;
+    const Time attackStart = Seconds(100.0);
+    const Time attackStop = Seconds(200.0);
+
+    telemetry.RecordFlowSample(Seconds(50.0),
+                               "Tempe-Fairbanks",
+                               "Tempe",
+                               "Fairbanks",
+                               4,
+                               4,
+                               MilliSeconds(120),
+                               attackStart,
+                               attackStop);
+    telemetry.RecordFlowSample(Seconds(150.0),
+                               "Tempe-Fairbanks",
+                               "Tempe",
+                               "Fairbanks",
+                               5,
+                               1,
+                               MilliSeconds(180),
+                               attackStart,
+                               attackStop);
+    telemetry.RecordFlowSample(Seconds(250.0),
+                               "Tempe-Fairbanks",
+                               "Tempe",
+                               "Fairbanks",
+                               3,
+                               3,
+                               MilliSeconds(110),
+                               attackStart,
+                               attackStop);
+    telemetry.RecordRouteSnapshot(Seconds(150.0),
+                                  "Tempe-Fairbanks",
+                                  {"Tempe", "IRIDIUM 113", "Fairbanks"});
+    telemetry.RecordForwardingEvent(Seconds(150.0),
+                                    42,
+                                    "IRIDIUM 113",
+                                    Ipv4Address("10.1.0.1"),
+                                    Ipv4Address("10.2.0.1"),
+                                    "Tempe-Fairbanks",
+                                    "grayhole-drop",
+                                    true);
+    telemetry.RecordNodeLabel(Seconds(150.0), "IRIDIUM 113", true, false);
+    telemetry.RecordMitigationEvent(Seconds(180.0),
+                                    "IRIDIUM 113",
+                                    "flagged",
+                                    "target-pdr-below-threshold");
+
+    NS_TEST_ASSERT_MSG_EQ(telemetry.GetFlowSamples().size(),
+                          3u,
+                          "Telemetry should keep in-memory flow samples");
+    NS_TEST_EXPECT_MSG_EQ(telemetry.GetFlowSamples()[0].attackActive,
+                          false,
+                          "Pre-attack flow window should not be labeled attack-active");
+    NS_TEST_EXPECT_MSG_EQ(telemetry.GetFlowSamples()[1].attackActive,
+                          true,
+                          "Flow sample inside attack window should be labeled attack-active");
+    NS_TEST_EXPECT_MSG_EQ(telemetry.GetFlowSamples()[2].attackActive,
+                          false,
+                          "Post-attack flow window should not be labeled attack-active");
+    NS_TEST_EXPECT_MSG_EQ(telemetry.GetFlowSamples()[1].pdr,
+                          0.2,
+                          "Flow sample should compute packet delivery ratio from replies/sent");
+    NS_TEST_ASSERT_MSG_EQ(telemetry.GetRouteSnapshots().size(),
+                          1u,
+                          "Telemetry should keep route snapshots");
+    NS_TEST_EXPECT_MSG_EQ(telemetry.GetRouteSnapshots().front().path.size(),
+                          3u,
+                          "Route snapshot should keep route membership path");
+    NS_TEST_ASSERT_MSG_EQ(telemetry.GetForwardingEvents().size(),
+                          1u,
+                          "Telemetry should keep forwarding events");
+    NS_TEST_EXPECT_MSG_EQ(telemetry.GetForwardingEvents().front().dropped,
+                          true,
+                          "Forwarding event should preserve drop label");
+    NS_TEST_ASSERT_MSG_EQ(telemetry.GetNodeLabels().size(),
+                          1u,
+                          "Telemetry should keep node labels");
+    NS_TEST_EXPECT_MSG_EQ(telemetry.GetNodeLabels().front().compromised,
+                          true,
+                          "Node label should preserve compromised flag");
+    NS_TEST_ASSERT_MSG_EQ(telemetry.GetMitigationEvents().size(),
+                          1u,
+                          "Telemetry should keep mitigation events");
+    NS_TEST_EXPECT_MSG_EQ(telemetry.GetMitigationEvents().front().action,
+                          std::string("flagged"),
+                          "Mitigation event should preserve action");
+
+    const std::string outputDir = CreateTempDirFilename("orbitshield-scenario3-telemetry");
+    telemetry.SetOutputDir(outputDir);
+    telemetry.SetWriteCsv(true);
+    std::string error;
+    NS_TEST_ASSERT_MSG_EQ(telemetry.WriteCsv(&error),
+                          true,
+                          "Telemetry CSV writer should succeed: " << error);
+
+    const auto flowLines = ReadTextLines(outputDir + "/flow_samples.csv");
+    const auto routeLines = ReadTextLines(outputDir + "/route_snapshots.csv");
+    const auto forwardingLines = ReadTextLines(outputDir + "/forwarding_events.csv");
+    const auto labelLines = ReadTextLines(outputDir + "/node_labels.csv");
+    const auto mitigationLines = ReadTextLines(outputDir + "/mitigation_events.csv");
+
+    NS_TEST_ASSERT_MSG_GT(flowLines.size(), 1u, "flow_samples.csv should contain a header and data");
+    NS_TEST_ASSERT_MSG_GT(routeLines.size(), 1u, "route_snapshots.csv should contain a header and data");
+    NS_TEST_ASSERT_MSG_GT(forwardingLines.size(),
+                          1u,
+                          "forwarding_events.csv should contain a header and data");
+    NS_TEST_ASSERT_MSG_GT(labelLines.size(), 1u, "node_labels.csv should contain a header and data");
+    NS_TEST_ASSERT_MSG_GT(mitigationLines.size(),
+                          1u,
+                          "mitigation_events.csv should contain a header and data");
+    NS_TEST_EXPECT_MSG_EQ(flowLines.front(),
+                          std::string("time_seconds,flow_id,source,destination,sent,replies,pdr,rtt_ms,attack_active"),
+                          "flow_samples.csv header should be stable");
+    NS_TEST_EXPECT_MSG_EQ(routeLines.front(),
+                          std::string("time_seconds,flow_id,path"),
+                          "route_snapshots.csv header should be stable");
+    NS_TEST_EXPECT_MSG_EQ(forwardingLines.front(),
+                          std::string("time_seconds,node_id,node_name,source,destination,target_pair_id,reason,dropped"),
+                          "forwarding_events.csv header should be stable");
+    NS_TEST_EXPECT_MSG_EQ(labelLines.front(),
+                          std::string("time_seconds,node_name,compromised,flagged"),
+                          "node_labels.csv header should be stable");
+    NS_TEST_EXPECT_MSG_EQ(mitigationLines.front(),
+                          std::string("time_seconds,node_name,action,reason"),
+                          "mitigation_events.csv header should be stable");
 }
 
 OrbitShieldGrayholePolicyTest::OrbitShieldGrayholePolicyTest()

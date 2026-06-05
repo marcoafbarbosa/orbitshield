@@ -39,6 +39,7 @@ OrbitShieldTestSuite::OrbitShieldTestSuite()
     AddTestCase(new OrbitShieldScenario3ConfigTest(), TestCase::Duration::QUICK);
     AddTestCase(new OrbitShieldRouteMembershipTest(), TestCase::Duration::QUICK);
     AddTestCase(new OrbitShieldGrayholePolicyTest(), TestCase::Duration::QUICK);
+    AddTestCase(new OrbitShieldScenario3TelemetryTest(), TestCase::Duration::QUICK);
 }
 
 static OrbitShieldTestSuite g_orbitShieldTestSuite;

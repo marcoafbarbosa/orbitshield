@@ -19,5 +19,6 @@
 #include "orbitshield-grayhole-policy.h"
 #include "orbitshield-routing-helper.h"
 #include "orbitshield-scenario3-config.h"
+#include "orbitshield-scenario3-telemetry.h"
 
 #endif /* NS3_ORBITSHIELD_MODULE_H */

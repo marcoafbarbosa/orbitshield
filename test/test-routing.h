@@ -225,4 +225,17 @@ class OrbitShieldGrayholePolicyTest : public ns3::TestCase
     void DoRun() override;
 };
 
+/**
+ * \brief Test case for Scenario 3 telemetry records and CSV artifacts
+ */
+class OrbitShieldScenario3TelemetryTest : public ns3::TestCase
+{
+  public:
+    OrbitShieldScenario3TelemetryTest();
+    ~OrbitShieldScenario3TelemetryTest() override;
+
+  private:
+    void DoRun() override;
+};
+
 #endif /* TEST_ROUTING_H */
