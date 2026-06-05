@@ -48,6 +48,10 @@ The module provides:
   - [Dynamic Refresh Integration](#dynamic-refresh-integration)
   - [SatelliteNetDevice Trait Summary](#satellitenetdevice-trait-summary)
   - [Known Constraints](#known-constraints)
+- [Scenario 3 Grayhole Experiments](#scenario-3-grayhole-experiments)
+  - [Profile Format](#profile-format)
+  - [Telemetry Artifacts](#telemetry-artifacts)
+  - [Detector and Mitigation](#detector-and-mitigation)
 - [Visualization Tooling](#visualization-tooling)
   - [ISL Visualizer](#isl-visualizer-orbitshield-isl-visualizer)
   - [Render DOT on World Map](#render-dot-on-world-map)
@@ -127,6 +131,7 @@ flowchart LR
   - Multi-link support: manages a vector of `SatelliteLink` objects per device
   - Correct P2P trait methods: `IsPointToPoint→true`, `NeedsArp→false`, `IsBroadcast→false`
   - Gateway-aware fanout selection for multi-link nodes during IPv4 forwarding
+  - Optional grayhole forwarding policy hook for route-conditioned selective drops
 - `SatelliteLink` (`Channel`):
   - Point-to-point satellite channel with configurable `IslPropagationDelayModel`
   - Range-based active/inactive state
@@ -138,6 +143,20 @@ flowchart LR
   - Plain C++ helper (not an ns-3 Object)
   - `Install(Ptr<Constellation>)`: installs Internet stack, assigns sequential /30 subnets, registers refresh callback, computes initial routes
   - `RecomputeRoutes(Ptr<Constellation>)`: BFS shortest-hop route recomputation; clears and rebuilds `Ipv4StaticRouting` tables on all nodes
+  - Route path introspection by source node and destination IPv4 address
+  - Optional satellite exclusion set for mitigation route recomputation
+- `OrbitShieldGrayholePolicy`:
+  - Route-conditioned target-flow policy for compromised satellites
+  - Matches IPv4 ground-pair traffic by configured direction and attack window
+  - Emits forwarding decisions for accepted and dropped target packets
+- `OrbitShieldScenario3Telemetry`:
+  - In-memory flow, route, forwarding, node-label, and mitigation records
+  - Optional CSV writer for Scenario 3 experiment artifacts
+- `OrbitShieldScenario3Detector`:
+  - Deterministic detector that scores target-route satellites from low-PDR target windows
+  - Provides a configurable policy hook for mitigation; it is not a trained AI model
+- `OrbitShieldScenario3Experiment`:
+  - Shared deterministic Scenario 3 runner logic used by tests and the example executable
 - `OrbitShieldUtils`:
   - Utility functions used across the module
 
@@ -164,6 +183,13 @@ All tests are in the `orbitshield` suite and can be run with:
 | `OrbitShieldDynamicRouteRefreshTest` | 10 route recomputations over 600 s; at least one reply in first 120 s |
 | `OrbitShieldMultiGroundStationRoutingTest` | All 10 GS pairs over 300 s / 30 s refresh; ≥ 7 pairs ≥ 80% delivery; RTT ≤ 500 ms; hop count ≤ 8 |
 | `OrbitShieldStaticRoutingStrategyTest` | Static recomputation under 20 fast refreshes (15 s) over 300 s; no crash |
+| `OrbitShieldScenario3ConfigTest` | Scenario 3 profile parsing, defaults, variants, invalid values, path resolution |
+| `OrbitShieldRouteMembershipTest` | Current route path and satellite transit membership for a target ground-station pair |
+| `OrbitShieldGrayholePolicyTest` | Route-active compromised satellite drops only target packets inside the attack window |
+| `OrbitShieldScenario3TelemetryTest` | In-memory Scenario 3 records and CSV artifact headers/data rows |
+| `OrbitShieldRouteExclusionTest` | Excluded satellites are omitted from recomputed routes and stale routes are removed |
+| `OrbitShieldScenario3DetectorTest` | Low-PDR target windows flag only satellites on target routes |
+| `OrbitShieldScenario3ExperimentTest` | Short deterministic Scenario 3 runs with mitigation and no-mitigation variants |
 
 ### Examples
 
@@ -171,6 +197,7 @@ All tests are in the `orbitshield` suite and can be run with:
 - `orbitshield-load-from-tle`
 - `orbitshield-load-from-yaml`
 - `orbitshield-dynamic-topology`
+- `orbitshield-scenario3-grayhole`
 
 ### Tools
 
@@ -193,6 +220,11 @@ contrib/orbitshield/
 |  |- satellite-mobility-model.h / satellite-mobility-model.cc
 |  |- isl-propagation-delay-model.h / isl-propagation-delay-model.cc
 |  |- orbitshield-routing-helper.h / orbitshield-routing-helper.cc
+|  |- orbitshield-grayhole-policy.h / orbitshield-grayhole-policy.cc
+|  |- orbitshield-scenario3-config.h / orbitshield-scenario3-config.cc
+|  |- orbitshield-scenario3-detector.h / orbitshield-scenario3-detector.cc
+|  |- orbitshield-scenario3-experiment.h / orbitshield-scenario3-experiment.cc
+|  |- orbitshield-scenario3-telemetry.h / orbitshield-scenario3-telemetry.cc
 |  |- orbitshield-utils.h / orbitshield-utils.cc
 |  |- orbitshield-module.h
 |- test/
@@ -206,6 +238,7 @@ contrib/orbitshield/
 |  |- orbitshield-load-from-tle.cc
 |  |- orbitshield-load-from-yaml.cc
 |  |- orbitshield-dynamic-topology.cc
+|  |- orbitshield-scenario3-grayhole.cc
 |- tools/
 |  |- .ne_110m_land.geojson
 |  |- analyze_constellation_rings.py
@@ -216,6 +249,8 @@ contrib/orbitshield/
 |- data/
 |  |- iridium-20260312.txt
 |  |- iridium-20260312.yaml
+|  |- scenarios/
+|     |- scenario3-grayhole.yaml
 |- CMakeLists.txt
 `- README.md
 ```
@@ -399,6 +434,10 @@ Notes:
 3. For each source node, runs a BFS (shortest-hop, unit edge weight) over the adjacency list.
 4. Installs `AddHostRouteTo` entries for every reachable destination address, selecting the correct next-hop gateway and outgoing interface index.
 
+The helper also caches the last recomputed node path for each source/destination host route. `GetRoutePath()`, `GetRouteHopCount()`, and `GetTransitSatelliteNames()` expose this route membership for telemetry, target-flow policies, and detector inputs.
+
+`SetExcludedSatellites()`, `AddExcludedSatellite()`, `ClearExcludedSatellites()`, and `GetExcludedSatellites()` configure satellites that should be treated as unavailable relays. During route recomputation, ISL and GSL edges incident to excluded satellites are skipped, and unreachable destinations do not retain stale host routes.
+
 This strategy is robust for Iridium-class LEO constellations where refresh intervals are 15–60 seconds and the graph is dense enough that a full BFS pass completes well under 1 ms of simulation time.
 
 ### Dynamic Refresh Integration
@@ -427,6 +466,58 @@ Multi-link `Send()` selects the outgoing link by resolving the packet's IPv4 des
 - Unreachable destinations (no active ISL/GSL path) are silently dropped; no ICMP unreachable is generated.
 - IPv6 is not supported. All routing uses `Ipv4StaticRouting`.
 - `AddLinkChangeCallback` stores the callback but link-state change events are not fired (the device is always considered up after construction).
+
+## Scenario 3 Grayhole Experiments
+
+`orbitshield-scenario3-grayhole` runs the Scenario 3 route-conditioned grayhole experiment from a YAML profile. The default profile is [data/scenarios/scenario3-grayhole.yaml](data/scenarios/scenario3-grayhole.yaml) and uses the Iridium dataset with Tempe, Fairbanks, Svalbard, Izhevsk, and Punta Arenas ground stations.
+
+The runner loads the constellation, builds ISLs and GSLs, installs shortest-hop IPv4 routes, resolves target route membership, applies the grayhole policy inputs, evaluates deterministic detector windows, optionally excludes flagged satellites, and writes telemetry artifacts. For a fixed profile, seed, and run, the output is deterministic.
+
+```bash
+./ns3 run orbitshield-scenario3-grayhole -- \
+  --config=contrib/orbitshield/data/scenarios/scenario3-grayhole.yaml \
+  --durationSeconds=300 \
+  --outputDir=contrib/orbitshield/results/scenario3-smoke
+```
+
+Supported scalar overrides are `--durationSeconds`, `--refreshIntervalSeconds`, `--attackDropProbability`, `--mitigationEnabled=true|false`, and `--outputDir`.
+
+### Profile Format
+
+The profile contains these top-level maps:
+
+| Section | Purpose |
+|---|---|
+| `constellation` | Ring/TLE metadata file, resolved relative to the profile path |
+| `simulation` | Duration and ns-3 RNG seed/run values |
+| `topology` | ISL/GSL range and refresh cadence |
+| `traffic` | ICMP-style ground-station traffic matrix and packet parameters |
+| `attack` | Compromised satellites, target ground pairs, direction, timing, and drop probability |
+| `detection` | Deterministic detector thresholds and minimum sample count |
+| `mitigation` | Route-exclusion enable flag, delay, and exclusion cap |
+| `telemetry` | Output directory, route snapshot cadence, and CSV enable flag |
+
+The default target pair is `Tempe -> Fairbanks`; matching is bidirectional unless `attack.direction` is set to `forward` or `reverse`. The default compromised set is `IRIDIUM 113`. Grayhole drops occur only when a compromised satellite is also on the current target route and the attack window is active.
+
+### Telemetry Artifacts
+
+When `telemetry.writeCsv` is true, the runner writes:
+
+| File | Contents |
+|---|---|
+| `flow_samples.csv` | Flow window delivery counts, PDR, RTT, and attack-window labels |
+| `route_snapshots.csv` | Target flow route membership snapshots |
+| `forwarding_events.csv` | Grayhole forwarding decisions and drop reasons |
+| `node_labels.csv` | Compromised and flagged node labels |
+| `mitigation_events.csv` | Detector flag/exclusion and route recomputation actions |
+
+The same record types are available in memory through `OrbitShieldScenario3Telemetry` for tests and future integrations.
+
+### Detector and Mitigation
+
+`OrbitShieldScenario3Detector` is deterministic and configurable. It scores satellites that appear on target routes when a target-flow window has enough samples and PDR below `detection.targetPdrThreshold`. A satellite is flagged when its score reaches `detection.scoreThreshold`, subject to `mitigation.maxExcludedSatellites`.
+
+When mitigation is enabled, flagged satellites are added to `OrbitShieldRoutingHelper`'s exclusion set and routes are recomputed. The implementation represents the AI action-policy hook with deterministic scoring; it does not include a trained model or external inference runtime.
 
 ## Visualization Tooling
 
@@ -492,6 +583,10 @@ Open the full GIF directly: [docs/media/iridium-20260312.gif](docs/media/iridium
 ./ns3 run orbitshield-load-from-tle
 ./ns3 run orbitshield-load-from-yaml
 ./ns3 run orbitshield-dynamic-topology
+./ns3 run orbitshield-scenario3-grayhole -- \
+  --config=contrib/orbitshield/data/scenarios/scenario3-grayhole.yaml \
+  --durationSeconds=300 \
+  --outputDir=contrib/orbitshield/results/scenario3-smoke
 ```
 
 ## API Reference
@@ -506,6 +601,11 @@ All public headers are exposed via the convenience include `ns3/orbitshield-modu
 - [`model/satellite-mobility-model.h`](model/satellite-mobility-model.h) — mobility binding
 - [`model/isl-propagation-delay-model.h`](model/isl-propagation-delay-model.h) — ISL delay model
 - [`model/orbitshield-routing-helper.h`](model/orbitshield-routing-helper.h) — `OrbitShieldRoutingHelper`
+- [`model/orbitshield-grayhole-policy.h`](model/orbitshield-grayhole-policy.h) — `OrbitShieldGrayholePolicy`
+- [`model/orbitshield-scenario3-config.h`](model/orbitshield-scenario3-config.h) — Scenario 3 profile loader
+- [`model/orbitshield-scenario3-detector.h`](model/orbitshield-scenario3-detector.h) — deterministic Scenario 3 detector
+- [`model/orbitshield-scenario3-experiment.h`](model/orbitshield-scenario3-experiment.h) — Scenario 3 experiment driver
+- [`model/orbitshield-scenario3-telemetry.h`](model/orbitshield-scenario3-telemetry.h) — Scenario 3 telemetry collector
 
 Common entry points:
 
@@ -539,13 +639,10 @@ Build tests and run the full suite:
 ./ns3 run "test-runner --suite=orbitshield"
 ```
 
-Run individual test cases:
+The ns-3 test runner in this workspace selects the OrbitShield suite as a unit; use verbose output to inspect individual test-case results:
 
 ```bash
-./ns3 run "test-runner --suite=orbitshield --testcase=OrbitShieldTempeFairbanksPingPathTest"
-./ns3 run "test-runner --suite=orbitshield --testcase=OrbitShieldMultiGroundStationRoutingTest"
-./ns3 run "test-runner --suite=orbitshield --testcase=OrbitShieldDynamicRouteRefreshTest"
-./ns3 run "test-runner --suite=orbitshield --testcase=OrbitShieldStaticRoutingStrategyTest"
+./ns3 run "test-runner --suite=orbitshield --verbose"
 ```
 
 See the [Tests](#tests) table above for the full list of test cases and what each verifies.
