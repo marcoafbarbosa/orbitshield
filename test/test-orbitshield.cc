@@ -36,6 +36,7 @@ OrbitShieldTestSuite::OrbitShieldTestSuite()
     AddTestCase(new OrbitShieldDynamicRouteRefreshTest(), TestCase::Duration::QUICK);
     AddTestCase(new OrbitShieldMultiGroundStationRoutingTest(), TestCase::Duration::QUICK);
     AddTestCase(new OrbitShieldStaticRoutingStrategyTest(), TestCase::Duration::QUICK);
+    AddTestCase(new OrbitShieldScenario3ConfigTest(), TestCase::Duration::QUICK);
 }
 
 static OrbitShieldTestSuite g_orbitShieldTestSuite;

@@ -186,4 +186,17 @@ class OrbitShieldStaticRoutingStrategyTest : public ns3::TestCase
     uint32_t m_replyCount{0};
 };
 
+/**
+ * \brief Test case for Scenario 3 YAML profile loading and validation
+ */
+class OrbitShieldScenario3ConfigTest : public ns3::TestCase
+{
+  public:
+    OrbitShieldScenario3ConfigTest();
+    ~OrbitShieldScenario3ConfigTest() override;
+
+  private:
+    void DoRun() override;
+};
+
 #endif /* TEST_ROUTING_H */

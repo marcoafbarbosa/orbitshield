@@ -26,6 +26,7 @@ build_lib(
     model/ground-station.cc
     model/isl-propagation-delay-model.cc
     model/orbitshield-routing-helper.cc
+    model/orbitshield-scenario3-config.cc
     model/orbitshield-utils.cc
     model/satellite-link.cc
     model/satellite-mobility-model.cc
@@ -36,6 +37,7 @@ build_lib(
     model/ground-station.h
     model/isl-propagation-delay-model.h
     model/orbitshield-routing-helper.h
+    model/orbitshield-scenario3-config.h
     model/orbitshield-utils.h
     model/satellite-link.h
     model/satellite-mobility-model.h

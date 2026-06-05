@@ -17,5 +17,6 @@
 #include "constellation.h"
 #include "ground-station.h"
 #include "orbitshield-routing-helper.h"
+#include "orbitshield-scenario3-config.h"
 
 #endif /* NS3_ORBITSHIELD_MODULE_H */

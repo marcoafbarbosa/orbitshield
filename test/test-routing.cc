@@ -13,10 +13,15 @@
 #include "ns3/simulator.h"
 
 #include <algorithm>
+#include <fstream>
+#include <cstdio>
+#include <limits.h>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+
+#include <unistd.h>
 
 using namespace ns3;
 
@@ -258,6 +263,16 @@ ComputeStaticHostRouteHopCount(Ptr<Node> source,
     }
 
     return (current == destinationNode) ? hops : 0;
+}
+
+std::string
+WriteScenario3Profile(const std::string& filename, const std::string& body)
+{
+    const std::string path = filename;
+    std::ofstream output(path);
+    output << body;
+    output.close();
+    return path;
 }
 
 } // namespace
@@ -1154,6 +1169,286 @@ OrbitShieldStaticRoutingStrategyTest::DoRun()
                           0u,
                           "Static routing must deliver at least one ICMP echo reply under a "
                           "15-second refresh interval over 300 seconds");
+
+    Simulator::Destroy();
+}
+
+OrbitShieldScenario3ConfigTest::OrbitShieldScenario3ConfigTest()
+    : TestCase("OrbitShieldScenario3ConfigTest")
+{
+}
+
+OrbitShieldScenario3ConfigTest::~OrbitShieldScenario3ConfigTest()
+{
+}
+
+void
+OrbitShieldScenario3ConfigTest::DoRun()
+{
+    OrbitShieldScenario3Config config;
+    std::string error;
+    const bool loaded = LoadOrbitShieldScenario3Config(
+        "contrib/orbitshield/data/scenarios/scenario3-grayhole.yaml",
+        config,
+        &error);
+
+    NS_TEST_ASSERT_MSG_EQ(loaded, true, "Default Scenario 3 profile should load: " << error);
+    NS_TEST_EXPECT_MSG_EQ(config.constellation.ringFile,
+                          std::string("contrib/orbitshield/data/iridium-20260312.yaml"),
+                          "Ring file path should resolve relative to the profile directory");
+    NS_TEST_EXPECT_MSG_EQ(config.simulation.durationSeconds,
+                          3000.0,
+                          "Default duration should match the Scenario 3 plan");
+    NS_TEST_EXPECT_MSG_EQ(config.simulation.seed, 1u, "Default RNG seed should be 1");
+    NS_TEST_EXPECT_MSG_EQ(config.simulation.run, 1u, "Default RNG run should be 1");
+    NS_TEST_EXPECT_MSG_EQ(config.topology.islMaxRangeMeters,
+                          2000000.0,
+                          "Default ISL range should be 2000 km");
+    NS_TEST_EXPECT_MSG_EQ(config.topology.groundMaxRangeMeters,
+                          50000000.0,
+                          "Default ground-link range should be 50000 km");
+    NS_TEST_EXPECT_MSG_EQ(config.topology.refreshIntervalSeconds,
+                          30.0,
+                          "Default refresh interval should be 30 seconds");
+    NS_TEST_EXPECT_MSG_EQ(config.traffic.pingIntervalSeconds,
+                          30.0,
+                          "Default ping interval should be 30 seconds");
+    NS_TEST_EXPECT_MSG_EQ(config.traffic.pingSizeBytes,
+                          56u,
+                          "Default ping payload should be 56 bytes");
+    NS_TEST_EXPECT_MSG_EQ(config.traffic.pairs.size(),
+                          10u,
+                          "Default traffic matrix should contain all ten unordered ground-station pairs");
+    NS_TEST_EXPECT_MSG_EQ(config.attack.compromisedSatellites.size(),
+                          1u,
+                          "Default profile should contain one compromised satellite");
+    NS_TEST_EXPECT_MSG_EQ(config.attack.compromisedSatellites.front(),
+                          std::string("IRIDIUM 113"),
+                          "Default compromised satellite should be IRIDIUM 113");
+    NS_TEST_EXPECT_MSG_EQ(config.attack.targetPairs.size(),
+                          1u,
+                          "Default profile should contain one target pair");
+    NS_TEST_EXPECT_MSG_EQ(config.attack.targetPairs.front().source,
+                          std::string("Tempe"),
+                          "Default target source should be Tempe");
+    NS_TEST_EXPECT_MSG_EQ(config.attack.targetPairs.front().destination,
+                          std::string("Fairbanks"),
+                          "Default target destination should be Fairbanks");
+    NS_TEST_EXPECT_MSG_EQ(OrbitShieldScenario3DirectionToString(config.attack.direction),
+                          std::string("bidirectional"),
+                          "Default attack direction should be bidirectional");
+    NS_TEST_EXPECT_MSG_EQ(config.attack.startSeconds,
+                          600.0,
+                          "Default attack start should be 600 seconds");
+    NS_TEST_EXPECT_MSG_EQ(config.attack.stopSeconds,
+                          2400.0,
+                          "Default attack stop should be 2400 seconds");
+    NS_TEST_EXPECT_MSG_EQ(config.attack.dropProbability,
+                          1.0,
+                          "Default drop probability should be deterministic");
+    NS_TEST_EXPECT_MSG_EQ(config.detection.enabled, true, "Detector should be enabled by default");
+    NS_TEST_EXPECT_MSG_EQ(config.detection.windowSeconds,
+                          120.0,
+                          "Default detection window should be 120 seconds");
+    NS_TEST_EXPECT_MSG_EQ(config.detection.minSamples,
+                          3u,
+                          "Default detector minimum sample count should be 3");
+    NS_TEST_EXPECT_MSG_EQ(config.detection.targetPdrThreshold,
+                          0.6,
+                          "Default target PDR threshold should be 0.6");
+    NS_TEST_EXPECT_MSG_EQ(config.detection.scoreThreshold,
+                          1.0,
+                          "Default detector score threshold should be 1.0");
+    NS_TEST_EXPECT_MSG_EQ(config.mitigation.enabled, true, "Mitigation should be enabled by default");
+    NS_TEST_EXPECT_MSG_EQ(config.mitigation.applyDelaySeconds,
+                          30.0,
+                          "Default mitigation delay should be 30 seconds");
+    NS_TEST_EXPECT_MSG_EQ(config.mitigation.maxExcludedSatellites,
+                          4u,
+                          "Default mitigation exclusion cap should be 4");
+    NS_TEST_EXPECT_MSG_EQ(config.telemetry.outputDir,
+                          std::string("contrib/orbitshield/data/scenarios/results/scenario3"),
+                          "Telemetry output directory should resolve relative to the profile directory");
+    NS_TEST_EXPECT_MSG_EQ(config.telemetry.routeSnapshotIntervalSeconds,
+                          30.0,
+                          "Default route snapshot cadence should be 30 seconds");
+    NS_TEST_EXPECT_MSG_EQ(config.telemetry.writeCsv, true, "CSV telemetry should be enabled by default");
+
+    Ptr<Constellation> constellation = CreateObject<Constellation>();
+    constellation->LoadFromRingFile(config.constellation.ringFile);
+    NS_TEST_EXPECT_MSG_EQ(ValidateOrbitShieldScenario3Config(config, constellation, &error),
+                          true,
+                          "Default profile should validate against the Iridium constellation: " << error);
+
+    char currentDirectory[PATH_MAX];
+    NS_TEST_ASSERT_MSG_NE(getcwd(currentDirectory, sizeof(currentDirectory)),
+                          nullptr,
+                          "Current working directory should be available");
+    const std::string absoluteRingFile =
+        std::string(currentDirectory) + "/contrib/orbitshield/data/iridium-20260312.yaml";
+
+    const std::string commonPrefix =
+        "constellation:\n"
+        "  ringFile: " + absoluteRingFile + "\n"
+        "simulation:\n"
+        "  durationSeconds: 900\n"
+        "topology:\n"
+        "  refreshIntervalSeconds: 30\n"
+        "traffic:\n"
+        "  pairs:\n"
+        "    - source: Tempe\n"
+        "      destination: Fairbanks\n"
+        "attack:\n"
+        "  targetPairs:\n"
+        "    - source: Tempe\n"
+        "      destination: Fairbanks\n";
+
+    const std::string oneCompromisedPath = WriteScenario3Profile(
+        CreateTempDirFilename("orbitshield-scenario3-one.yaml"),
+        commonPrefix +
+            "  compromisedSatellites:\n"
+            "    - IRIDIUM 113\n"
+            "  direction: forward\n"
+            "  startSeconds: 60\n"
+            "  stopSeconds: 600\n"
+            "mitigation:\n"
+            "  enabled: false\n");
+    OrbitShieldScenario3Config oneCompromised;
+    NS_TEST_ASSERT_MSG_EQ(LoadOrbitShieldScenario3Config(oneCompromisedPath,
+                                                         oneCompromised,
+                                                         &error),
+                          true,
+                          "One-satellite variant should load: " << error);
+    NS_TEST_EXPECT_MSG_EQ(oneCompromised.attack.compromisedSatellites.size(),
+                          1u,
+                          "Variant should keep one compromised satellite");
+    NS_TEST_EXPECT_MSG_EQ(OrbitShieldScenario3DirectionToString(oneCompromised.attack.direction),
+                          std::string("forward"),
+                          "Variant should parse forward direction");
+    NS_TEST_EXPECT_MSG_EQ(oneCompromised.mitigation.enabled,
+                          false,
+                          "Variant should allow disabled mitigation");
+    NS_TEST_EXPECT_MSG_EQ(ValidateOrbitShieldScenario3Config(oneCompromised, constellation, &error),
+                          true,
+                          "One-satellite variant should validate: " << error);
+
+    const std::string twoCompromisedPath = WriteScenario3Profile(
+        CreateTempDirFilename("orbitshield-scenario3-two.yaml"),
+        commonPrefix +
+            "  compromisedSatellites:\n"
+            "    - IRIDIUM 113\n"
+            "    - IRIDIUM 116\n"
+            "  direction: reverse\n"
+            "  startSeconds: 30\n"
+            "  stopSeconds: 300\n"
+            "detection:\n"
+            "  minSamples: 4\n");
+    OrbitShieldScenario3Config twoCompromised;
+    NS_TEST_ASSERT_MSG_EQ(LoadOrbitShieldScenario3Config(twoCompromisedPath,
+                                                         twoCompromised,
+                                                         &error),
+                          true,
+                          "Two-satellite variant should load: " << error);
+    NS_TEST_EXPECT_MSG_EQ(twoCompromised.attack.compromisedSatellites.size(),
+                          2u,
+                          "Variant should parse two compromised satellites");
+    NS_TEST_EXPECT_MSG_EQ(OrbitShieldScenario3DirectionToString(twoCompromised.attack.direction),
+                          std::string("reverse"),
+                          "Variant should parse reverse direction");
+    NS_TEST_EXPECT_MSG_EQ(twoCompromised.detection.minSamples,
+                          4u,
+                          "Variant should parse detector sample override");
+    NS_TEST_EXPECT_MSG_EQ(ValidateOrbitShieldScenario3Config(twoCompromised, constellation, &error),
+                          true,
+                          "Two-satellite variant should validate: " << error);
+
+    const std::string fourCompromisedPath = WriteScenario3Profile(
+        CreateTempDirFilename("orbitshield-scenario3-four.yaml"),
+        commonPrefix +
+            "  compromisedSatellites:\n"
+            "    - IRIDIUM 113\n"
+            "    - IRIDIUM 116\n"
+            "    - IRIDIUM 120\n"
+            "    - IRIDIUM 130\n"
+            "  direction: bidirectional\n"
+            "  startSeconds: 120\n"
+            "  stopSeconds: 840\n"
+            "mitigation:\n"
+            "  maxExcludedSatellites: 4\n");
+    OrbitShieldScenario3Config fourCompromised;
+    NS_TEST_ASSERT_MSG_EQ(LoadOrbitShieldScenario3Config(fourCompromisedPath,
+                                                         fourCompromised,
+                                                         &error),
+                          true,
+                          "Four-satellite variant should load: " << error);
+    NS_TEST_EXPECT_MSG_EQ(fourCompromised.attack.compromisedSatellites.size(),
+                          4u,
+                          "Variant should parse four compromised satellites");
+    NS_TEST_EXPECT_MSG_EQ(fourCompromised.mitigation.maxExcludedSatellites,
+                          4u,
+                          "Variant should parse mitigation exclusion cap");
+    NS_TEST_EXPECT_MSG_EQ(ValidateOrbitShieldScenario3Config(fourCompromised, constellation, &error),
+                          true,
+                          "Four-satellite variant should validate: " << error);
+
+    const std::string invalidDirectionPath = WriteScenario3Profile(
+        CreateTempDirFilename("orbitshield-scenario3-invalid-direction.yaml"),
+        commonPrefix +
+            "  compromisedSatellites:\n"
+            "    - IRIDIUM 113\n"
+            "  direction: sideways\n"
+            "  startSeconds: 60\n"
+            "  stopSeconds: 600\n");
+    OrbitShieldScenario3Config invalidDirection;
+    error.clear();
+    NS_TEST_EXPECT_MSG_EQ(LoadOrbitShieldScenario3Config(invalidDirectionPath,
+                                                        invalidDirection,
+                                                        &error),
+                          false,
+                          "Invalid direction should fail cleanly");
+    NS_TEST_EXPECT_MSG_NE(error.empty(), true, "Invalid profile should provide an error message");
+
+    const std::string invalidRangePath = WriteScenario3Profile(
+        CreateTempDirFilename("orbitshield-scenario3-invalid-range.yaml"),
+        commonPrefix +
+            "  compromisedSatellites:\n"
+            "    - IRIDIUM 113\n"
+            "  startSeconds: 800\n"
+            "  stopSeconds: 600\n");
+    OrbitShieldScenario3Config invalidRange;
+    error.clear();
+    NS_TEST_EXPECT_MSG_EQ(LoadOrbitShieldScenario3Config(invalidRangePath, invalidRange, &error),
+                          false,
+                          "Invalid attack timing should fail cleanly");
+    NS_TEST_EXPECT_MSG_NE(error.empty(), true, "Invalid timing should provide an error message");
+
+    const std::string unknownSatellitePath = WriteScenario3Profile(
+        CreateTempDirFilename("orbitshield-scenario3-unknown-satellite.yaml"),
+        commonPrefix +
+            "  compromisedSatellites:\n"
+            "    - UNKNOWN SATELLITE\n"
+            "  startSeconds: 60\n"
+            "  stopSeconds: 600\n");
+    OrbitShieldScenario3Config unknownSatellite;
+    NS_TEST_ASSERT_MSG_EQ(LoadOrbitShieldScenario3Config(unknownSatellitePath,
+                                                         unknownSatellite,
+                                                         &error),
+                          true,
+                          "Name validation should be deferred until a constellation is loaded");
+    error.clear();
+    NS_TEST_EXPECT_MSG_EQ(ValidateOrbitShieldScenario3Config(unknownSatellite,
+                                                            constellation,
+                                                            &error),
+                          false,
+                          "Unknown compromised satellite should fail constellation validation");
+    NS_TEST_EXPECT_MSG_NE(error.empty(), true, "Validation failure should provide an error message");
+
+    std::remove(oneCompromisedPath.c_str());
+    std::remove(twoCompromisedPath.c_str());
+    std::remove(fourCompromisedPath.c_str());
+    std::remove(invalidDirectionPath.c_str());
+    std::remove(invalidRangePath.c_str());
+    std::remove(unknownSatellitePath.c_str());
 
     Simulator::Destroy();
 }

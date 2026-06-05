@@ -1,0 +1,58 @@
+constellation:
+  ringFile: ../iridium-20260312.yaml
+simulation:
+  durationSeconds: 3000.0
+  seed: 1
+  run: 1
+topology:
+  islMaxRangeMeters: 2000000.0
+  groundMaxRangeMeters: 50000000.0
+  refreshIntervalSeconds: 30.0
+traffic:
+  pingIntervalSeconds: 30.0
+  pingSizeBytes: 56
+  pairs:
+    - source: Tempe
+      destination: Fairbanks
+    - source: Tempe
+      destination: Svalbard
+    - source: Tempe
+      destination: Izhevsk
+    - source: Tempe
+      destination: Punta Arenas
+    - source: Fairbanks
+      destination: Svalbard
+    - source: Fairbanks
+      destination: Izhevsk
+    - source: Fairbanks
+      destination: Punta Arenas
+    - source: Svalbard
+      destination: Izhevsk
+    - source: Svalbard
+      destination: Punta Arenas
+    - source: Izhevsk
+      destination: Punta Arenas
+attack:
+  compromisedSatellites:
+    - IRIDIUM 113
+  targetPairs:
+    - source: Tempe
+      destination: Fairbanks
+  direction: bidirectional
+  startSeconds: 600.0
+  stopSeconds: 2400.0
+  dropProbability: 1.0
+detection:
+  enabled: true
+  windowSeconds: 120.0
+  minSamples: 3
+  targetPdrThreshold: 0.6
+  scoreThreshold: 1.0
+mitigation:
+  enabled: true
+  applyDelaySeconds: 30.0
+  maxExcludedSatellites: 4
+telemetry:
+  outputDir: results/scenario3
+  routeSnapshotIntervalSeconds: 30.0
+  writeCsv: true
