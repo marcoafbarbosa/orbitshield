@@ -1098,6 +1098,84 @@ OrbitShieldScenario3DetectorTest::DoRun()
                           "Detector should allow zero configured exclusions");
 }
 
+OrbitShieldScenario3ExperimentTest::OrbitShieldScenario3ExperimentTest()
+    : TestCase("OrbitShieldScenario3ExperimentTest")
+{
+}
+
+OrbitShieldScenario3ExperimentTest::~OrbitShieldScenario3ExperimentTest()
+{
+}
+
+void
+OrbitShieldScenario3ExperimentTest::DoRun()
+{
+    OrbitShieldScenario3Config config;
+    std::string error;
+    NS_TEST_ASSERT_MSG_EQ(LoadOrbitShieldScenario3Config(
+                              "contrib/orbitshield/data/scenarios/scenario3-grayhole.yaml",
+                              config,
+                              &error),
+                          true,
+                          "Default Scenario 3 profile should load: " << error);
+
+    config.simulation.durationSeconds = 300.0;
+    config.attack.startSeconds = 60.0;
+    config.attack.stopSeconds = 240.0;
+    config.detection.windowSeconds = 60.0;
+    config.attack.dropProbability = 1.0;
+    config.telemetry.outputDir = CreateTempDirFilename("orbitshield-scenario3-experiment");
+
+    Ptr<Constellation> experimentConstellation = CreateObject<Constellation>();
+    experimentConstellation->LoadFromRingFile(config.constellation.ringFile);
+    config.attack.compromisedSatellites.clear();
+    for (const auto& satellite : experimentConstellation->GetSatellites())
+    {
+        config.attack.compromisedSatellites.push_back(satellite->GetName());
+    }
+
+    OrbitShieldScenario3ExperimentSummary summary;
+    NS_TEST_ASSERT_MSG_EQ(RunOrbitShieldScenario3Experiment(config, summary, &error),
+                          true,
+                          "Short Scenario 3 experiment should run: " << error);
+    NS_TEST_EXPECT_MSG_GT(summary.baselinePdr,
+                          summary.attackPdr,
+                          "Target PDR should be lower during the attack than baseline");
+    NS_TEST_EXPECT_MSG_GT(summary.dropEvents,
+                          0u,
+                          "Grayhole experiment should record at least one drop event");
+    NS_TEST_EXPECT_MSG_GT(summary.mitigationEvents,
+                          0u,
+                          "Mitigation-enabled experiment should record mitigation events");
+    NS_TEST_EXPECT_MSG_GT(summary.excludedSatellites.size(),
+                          0u,
+                          "Mitigation-enabled experiment should exclude at least one satellite");
+
+    const auto mitigationLines = ReadTextLines(config.telemetry.outputDir + "/mitigation_events.csv");
+    NS_TEST_ASSERT_MSG_GT(mitigationLines.size(),
+                          1u,
+                          "Mitigation-enabled experiment should write mitigation CSV rows");
+
+    OrbitShieldScenario3Config noMitigation = config;
+    noMitigation.mitigation.enabled = false;
+    noMitigation.telemetry.outputDir = CreateTempDirFilename("orbitshield-scenario3-experiment-no-mitigation");
+    OrbitShieldScenario3ExperimentSummary noMitigationSummary;
+    NS_TEST_ASSERT_MSG_EQ(RunOrbitShieldScenario3Experiment(noMitigation,
+                                                            noMitigationSummary,
+                                                            &error),
+                          true,
+                          "No-mitigation Scenario 3 experiment should run: " << error);
+    NS_TEST_EXPECT_MSG_GT(noMitigationSummary.dropEvents,
+                          0u,
+                          "No-mitigation variant should still record grayhole drops");
+    NS_TEST_EXPECT_MSG_EQ(noMitigationSummary.mitigationEvents,
+                          0u,
+                          "No-mitigation variant should not record mitigation events");
+    NS_TEST_EXPECT_MSG_EQ(noMitigationSummary.excludedSatellites.empty(),
+                          true,
+                          "No-mitigation variant should not exclude satellites");
+}
+
 OrbitShieldGrayholePolicyTest::OrbitShieldGrayholePolicyTest()
     : TestCase("OrbitShieldGrayholePolicyTest")
 {

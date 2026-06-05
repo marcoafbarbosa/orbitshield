@@ -264,4 +264,17 @@ class OrbitShieldScenario3DetectorTest : public ns3::TestCase
     void DoRun() override;
 };
 
+/**
+ * \brief Test case for shortened deterministic Scenario 3 experiment runs
+ */
+class OrbitShieldScenario3ExperimentTest : public ns3::TestCase
+{
+  public:
+    OrbitShieldScenario3ExperimentTest();
+    ~OrbitShieldScenario3ExperimentTest() override;
+
+  private:
+    void DoRun() override;
+};
+
 #endif /* TEST_ROUTING_H */

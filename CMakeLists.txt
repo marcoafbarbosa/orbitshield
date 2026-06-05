@@ -29,6 +29,7 @@ build_lib(
     model/orbitshield-routing-helper.cc
     model/orbitshield-scenario3-config.cc
     model/orbitshield-scenario3-detector.cc
+    model/orbitshield-scenario3-experiment.cc
     model/orbitshield-scenario3-telemetry.cc
     model/orbitshield-utils.cc
     model/satellite-link.cc
@@ -43,6 +44,7 @@ build_lib(
     model/orbitshield-routing-helper.h
     model/orbitshield-scenario3-config.h
     model/orbitshield-scenario3-detector.h
+    model/orbitshield-scenario3-experiment.h
     model/orbitshield-scenario3-telemetry.h
     model/orbitshield-utils.h
     model/satellite-link.h
