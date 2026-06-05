@@ -199,4 +199,17 @@ class OrbitShieldScenario3ConfigTest : public ns3::TestCase
     void DoRun() override;
 };
 
+/**
+ * \brief Test case for current route path membership introspection
+ */
+class OrbitShieldRouteMembershipTest : public ns3::TestCase
+{
+  public:
+    OrbitShieldRouteMembershipTest();
+    ~OrbitShieldRouteMembershipTest() override;
+
+  private:
+    void DoRun() override;
+};
+
 #endif /* TEST_ROUTING_H */

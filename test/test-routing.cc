@@ -196,6 +196,52 @@ FindHostRoute(Ptr<Ipv4StaticRouting> staticRouting,
     return false;
 }
 
+bool
+LinkConnectsNodes(Ptr<SatelliteLink> link, Ptr<Node> firstNode, Ptr<Node> secondNode)
+{
+    if (!link || !firstNode || !secondNode || !link->IsActive())
+    {
+        return false;
+    }
+
+    Ptr<NetDevice> firstDevice = link->GetDevice(0);
+    Ptr<NetDevice> secondDevice = link->GetDevice(1);
+    if (!firstDevice || !secondDevice)
+    {
+        return false;
+    }
+
+    Ptr<Node> linkFirstNode = firstDevice->GetNode();
+    Ptr<Node> linkSecondNode = secondDevice->GetNode();
+    return (linkFirstNode == firstNode && linkSecondNode == secondNode) ||
+           (linkFirstNode == secondNode && linkSecondNode == firstNode);
+}
+
+bool
+HasActiveLinkBetween(Ptr<Constellation> constellation, Ptr<Node> firstNode, Ptr<Node> secondNode)
+{
+    if (!constellation)
+    {
+        return false;
+    }
+
+    for (const auto& link : constellation->GetCurrentIsls())
+    {
+        if (LinkConnectsNodes(link, firstNode, secondNode))
+        {
+            return true;
+        }
+    }
+    for (const auto& link : constellation->GetCurrentGroundLinks())
+    {
+        if (LinkConnectsNodes(link, firstNode, secondNode))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 uint32_t
 ComputeStaticHostRouteHopCount(Ptr<Node> source,
                                Ptr<Node> destinationNode,
@@ -635,6 +681,79 @@ OrbitShieldIpv4AddressAssignmentTest::DoRun()
     }
 
     NS_LOG_INFO("Sequential /30 allocation verified: " << totalLinks << " link(s), all blocks correct");
+    Simulator::Destroy();
+}
+
+OrbitShieldRouteMembershipTest::OrbitShieldRouteMembershipTest()
+    : TestCase("OrbitShieldRouteMembershipTest")
+{
+}
+
+OrbitShieldRouteMembershipTest::~OrbitShieldRouteMembershipTest()
+{
+}
+
+void
+OrbitShieldRouteMembershipTest::DoRun()
+{
+    Ptr<Constellation> constellation = CreateObject<Constellation>();
+    constellation->LoadFromRingFile("contrib/orbitshield/data/iridium-20260312.yaml");
+    constellation->SetIslRefreshInterval(Seconds(30.0));
+    constellation->CreateIslLinks(2000000.0);
+    constellation->CreateGroundLinks(50000000.0);
+    constellation->RefreshIslTopology();
+
+    OrbitShieldRoutingHelper routingHelper;
+    routingHelper.Install(constellation);
+
+    Ptr<GroundStation> tempe = FindGroundStationByName(constellation->GetGroundStations(), "Tempe");
+    Ptr<GroundStation> fairbanks =
+        FindGroundStationByName(constellation->GetGroundStations(), "Fairbanks");
+
+    NS_TEST_ASSERT_MSG_NE(tempe, nullptr, "Tempe ground station must exist in Iridium dataset");
+    NS_TEST_ASSERT_MSG_NE(fairbanks, nullptr, "Fairbanks ground station must exist in Iridium dataset");
+
+    Ipv4Address destination = GetFirstNonLoopbackAddress(fairbanks);
+    NS_TEST_ASSERT_MSG_NE(destination,
+                          Ipv4Address::GetZero(),
+                          "Fairbanks must have a non-loopback address after routing install");
+
+    const auto path = routingHelper.GetRoutePath(tempe, destination);
+    NS_TEST_ASSERT_MSG_GT(path.size(), 1u, "Tempe-to-Fairbanks route path should be non-empty");
+    NS_TEST_EXPECT_MSG_EQ(path.front(), tempe, "Route path should start at Tempe");
+    NS_TEST_EXPECT_MSG_EQ(path.back(), fairbanks, "Route path should end at Fairbanks");
+    NS_TEST_EXPECT_MSG_EQ(routingHelper.GetRouteHopCount(tempe, destination),
+                          static_cast<uint32_t>(path.size() - 1),
+                          "Route hop count should match path transitions");
+
+    bool hasSatelliteTransit = false;
+    for (std::size_t pathIndex = 1; pathIndex + 1 < path.size(); ++pathIndex)
+    {
+        if (DynamicCast<Satellite>(path[pathIndex]))
+        {
+            hasSatelliteTransit = true;
+        }
+
+        NS_TEST_EXPECT_MSG_EQ(HasActiveLinkBetween(constellation, path[pathIndex - 1], path[pathIndex]),
+                              true,
+                              "Every returned route transition should be backed by an active link");
+    }
+    NS_TEST_EXPECT_MSG_EQ(HasActiveLinkBetween(constellation,
+                                               path[path.size() - 2],
+                                               path.back()),
+                          true,
+                          "Final route transition should be backed by an active link");
+
+    if (path.size() > 2)
+    {
+        NS_TEST_EXPECT_MSG_EQ(hasSatelliteTransit,
+                              true,
+                              "Multi-hop Tempe-to-Fairbanks route should include a satellite transit node");
+        NS_TEST_EXPECT_MSG_GT(routingHelper.GetTransitSatelliteNames(tempe, destination).size(),
+                              0u,
+                              "Transit satellite name helper should report satellite membership");
+    }
+
     Simulator::Destroy();
 }
 
