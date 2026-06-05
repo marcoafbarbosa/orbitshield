@@ -16,6 +16,7 @@
 #include "isl-propagation-delay-model.h"
 #include "constellation.h"
 #include "ground-station.h"
+#include "orbitshield-grayhole-policy.h"
 #include "orbitshield-routing-helper.h"
 #include "orbitshield-scenario3-config.h"
 

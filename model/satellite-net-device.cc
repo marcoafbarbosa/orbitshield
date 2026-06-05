@@ -3,6 +3,7 @@
  */
 
 #include "satellite-net-device.h"
+
 #include "ns3/log.h"
 #include "ns3/simulator.h"
 #include "ns3/ipv4.h"
@@ -147,6 +148,18 @@ const std::vector<Ptr<SatelliteLink>>&
 SatelliteNetDevice::GetLinks() const
 {
     return m_links;
+}
+
+void
+SatelliteNetDevice::SetForwardingPolicy(Ptr<OrbitShieldGrayholePolicy> policy)
+{
+    m_forwardingPolicy = policy;
+}
+
+Ptr<OrbitShieldGrayholePolicy>
+SatelliteNetDevice::GetForwardingPolicy() const
+{
+    return m_forwardingPolicy;
 }
 
 bool
@@ -309,6 +322,10 @@ SatelliteNetDevice::Send(Ptr<Packet> packet, const Address& dest, uint16_t proto
         }
 
         const Address resolvedDest = isBroadcast ? peer->GetAddress() : dest;
+        if (m_forwardingPolicy && m_forwardingPolicy->ShouldDrop(m_node, packet, protocolNumber))
+        {
+            return true;
+        }
         if (link->Send(this, packet, resolvedDest, protocolNumber, m_address))
         {
             return true;
@@ -361,6 +378,10 @@ SatelliteNetDevice::SendFrom(Ptr<Packet> packet,
         }
 
         const Address resolvedDest = isBroadcast ? peer->GetAddress() : dest;
+        if (m_forwardingPolicy && m_forwardingPolicy->ShouldDrop(m_node, packet, protocolNumber))
+        {
+            return true;
+        }
         if (link->Send(this, packet, resolvedDest, protocolNumber, source))
         {
             return true;

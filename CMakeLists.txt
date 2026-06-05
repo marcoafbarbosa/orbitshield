@@ -25,6 +25,7 @@ build_lib(
     model/constellation.cc
     model/ground-station.cc
     model/isl-propagation-delay-model.cc
+    model/orbitshield-grayhole-policy.cc
     model/orbitshield-routing-helper.cc
     model/orbitshield-scenario3-config.cc
     model/orbitshield-utils.cc
@@ -36,6 +37,7 @@ build_lib(
     model/constellation.h
     model/ground-station.h
     model/isl-propagation-delay-model.h
+    model/orbitshield-grayhole-policy.h
     model/orbitshield-routing-helper.h
     model/orbitshield-scenario3-config.h
     model/orbitshield-utils.h

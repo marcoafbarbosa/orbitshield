@@ -4,8 +4,10 @@
 
 #include "test-routing.h"
 #include "ns3/orbitshield-module.h"
+#include "ns3/constant-position-mobility-model.h"
 #include "ns3/test.h"
 #include "ns3/ipv4.h"
+#include "ns3/ipv4-header.h"
 #include "ns3/ipv4-routing-table-entry.h"
 #include "ns3/ipv4-static-routing-helper.h"
 #include "ns3/ping-helper.h"
@@ -40,6 +42,13 @@ struct GsPairResult
     bool allRttsValid{true}; ///< True if every observed RTT was <= 500 ms.
 };
 
+struct GrayholePolicyCounters
+{
+    uint32_t receiveCount{0};
+    uint32_t dropDecisionCount{0};
+    uint32_t forwardDecisionCount{0};
+};
+
 /**
  * \brief Free-function RTT callback bound to a specific GsPairResult via MakeBoundCallback.
  *
@@ -59,6 +68,49 @@ OnGsPairRtt(GsPairResult* result, uint16_t seq, Time rtt)
     if (rtt > MilliSeconds(500))
     {
         result->allRttsValid = false;
+    }
+}
+
+bool
+OnGrayholeReceive(GrayholePolicyCounters* counters,
+                  Ptr<NetDevice> device,
+                  Ptr<const Packet> packet,
+                  uint16_t protocol,
+                  const Address& sender)
+{
+    (void)device;
+    (void)packet;
+    (void)protocol;
+    (void)sender;
+    ++counters->receiveCount;
+    return true;
+}
+
+void
+OnGrayholeDecision(GrayholePolicyCounters* counters,
+                   Time time,
+                   uint32_t nodeId,
+                   std::string nodeName,
+                   Ipv4Address source,
+                   Ipv4Address destination,
+                   std::string targetPairId,
+                   std::string reason,
+                   bool dropped)
+{
+    (void)time;
+    (void)nodeId;
+    (void)nodeName;
+    (void)source;
+    (void)destination;
+    (void)targetPairId;
+    (void)reason;
+    if (dropped)
+    {
+        ++counters->dropDecisionCount;
+    }
+    else
+    {
+        ++counters->forwardDecisionCount;
     }
 }
 
@@ -240,6 +292,27 @@ HasActiveLinkBetween(Ptr<Constellation> constellation, Ptr<Node> firstNode, Ptr<
         }
     }
     return false;
+}
+
+Ptr<Packet>
+CreateIpv4TestPacket(Ipv4Address source, Ipv4Address destination)
+{
+    Ptr<Packet> packet = Create<Packet>(32);
+    Ipv4Header header;
+    header.SetSource(source);
+    header.SetDestination(destination);
+    header.SetProtocol(1);
+    header.SetPayloadSize(packet->GetSize());
+    packet->AddHeader(header);
+    return packet;
+}
+
+void
+AttachFixedMobility(Ptr<Node> node, const Vector& position)
+{
+    Ptr<ConstantPositionMobilityModel> mobility = CreateObject<ConstantPositionMobilityModel>();
+    mobility->SetPosition(position);
+    node->AggregateObject(mobility);
 }
 
 uint32_t
@@ -681,6 +754,121 @@ OrbitShieldIpv4AddressAssignmentTest::DoRun()
     }
 
     NS_LOG_INFO("Sequential /30 allocation verified: " << totalLinks << " link(s), all blocks correct");
+    Simulator::Destroy();
+}
+
+OrbitShieldGrayholePolicyTest::OrbitShieldGrayholePolicyTest()
+    : TestCase("OrbitShieldGrayholePolicyTest")
+{
+}
+
+OrbitShieldGrayholePolicyTest::~OrbitShieldGrayholePolicyTest()
+{
+}
+
+void
+OrbitShieldGrayholePolicyTest::DoRun()
+{
+    std::string tleLine1 = "1 25544U 98067A   22071.78032407  .00021395  00000-0  39008-3 0  9996";
+    std::string tleLine2 = "2 25544  51.6424  94.0370 0004047 256.5103  89.8846 15.49386383330227";
+    perturb::JulianDate simulationStart(perturb::DateTime(2026, 1, 1, 0, 0, 0));
+
+    Ptr<Satellite> compromisedSatellite =
+        CreateObject<Satellite>("IRIDIUM 113", tleLine1, tleLine2, simulationStart);
+    Ptr<Satellite> peerSatellite =
+        CreateObject<Satellite>("IRIDIUM 116", tleLine1, tleLine2, simulationStart);
+    AttachFixedMobility(compromisedSatellite, Vector(0.0, 0.0, 0.0));
+    AttachFixedMobility(peerSatellite, Vector(1.0, 0.0, 0.0));
+
+    Ptr<SatelliteNetDevice> compromisedDevice = CreateObject<SatelliteNetDevice>();
+    Ptr<SatelliteNetDevice> peerDevice = CreateObject<SatelliteNetDevice>();
+    compromisedDevice->SetNode(compromisedSatellite);
+    peerDevice->SetNode(peerSatellite);
+    compromisedSatellite->AddDevice(compromisedDevice);
+    peerSatellite->AddDevice(peerDevice);
+
+    Ptr<SatelliteLink> link = CreateObject<SatelliteLink>(compromisedDevice, peerDevice);
+    link->SetMaxRange(100.0);
+
+    GrayholePolicyCounters counters;
+    peerDevice->SetReceiveCallback(MakeBoundCallback(&OnGrayholeReceive, &counters));
+
+    Ptr<OrbitShieldGrayholePolicy> policy = CreateObject<OrbitShieldGrayholePolicy>();
+    policy->SetCompromisedSatellites({"IRIDIUM 113"});
+    policy->SetAttackWindow(Seconds(0.0), Seconds(10.0));
+    policy->SetDropProbability(1.0);
+    policy->SetDirection(OrbitShieldScenario3Direction::BIDIRECTIONAL);
+    policy->AddTargetPair(Ipv4Address("10.1.0.1"),
+                          Ipv4Address("10.2.0.1"),
+                          {"IRIDIUM 113"},
+                          "Tempe-Fairbanks");
+    policy->SetDecisionCallback(MakeBoundCallback(&OnGrayholeDecision, &counters));
+    compromisedDevice->SetForwardingPolicy(policy);
+
+    const bool targetAccepted = compromisedDevice->Send(
+        CreateIpv4TestPacket(Ipv4Address("10.1.0.1"), Ipv4Address("10.2.0.1")),
+        peerDevice->GetAddress(),
+        0x0800);
+    Simulator::Run();
+    NS_TEST_EXPECT_MSG_EQ(targetAccepted,
+                          true,
+                          "Policy-dropped target packet should be accepted by the device send path");
+    NS_TEST_EXPECT_MSG_EQ(counters.receiveCount,
+                          0u,
+                          "Matching target packet should not be delivered during active grayhole window");
+    NS_TEST_EXPECT_MSG_EQ(counters.dropDecisionCount,
+                          1u,
+                          "Exactly one drop decision should be emitted for the dropped target packet");
+
+    const bool nonTargetAccepted = compromisedDevice->Send(
+        CreateIpv4TestPacket(Ipv4Address("10.3.0.1"), Ipv4Address("10.4.0.1")),
+        peerDevice->GetAddress(),
+        0x0800);
+    Simulator::Run();
+    NS_TEST_EXPECT_MSG_EQ(nonTargetAccepted, true, "Non-target packet should be forwarded normally");
+    NS_TEST_EXPECT_MSG_EQ(counters.receiveCount,
+                          1u,
+                          "Non-target packet should be delivered through the same device");
+    NS_TEST_EXPECT_MSG_EQ(counters.dropDecisionCount,
+                          1u,
+                          "Non-target packet should not emit an additional drop decision");
+
+    policy->SetAttackWindow(Seconds(10.0), Seconds(20.0));
+    const bool outsideWindowAccepted = compromisedDevice->Send(
+        CreateIpv4TestPacket(Ipv4Address("10.1.0.1"), Ipv4Address("10.2.0.1")),
+        peerDevice->GetAddress(),
+        0x0800);
+    Simulator::Run();
+    NS_TEST_EXPECT_MSG_EQ(outsideWindowAccepted,
+                          true,
+                          "Target packet outside the attack window should be forwarded");
+    NS_TEST_EXPECT_MSG_EQ(counters.receiveCount,
+                          2u,
+                          "Target packet outside the attack window should be delivered");
+    NS_TEST_EXPECT_MSG_EQ(counters.dropDecisionCount,
+                          1u,
+                          "Outside-window target packet should not emit a drop decision");
+
+    policy->SetAttackWindow(Seconds(0.0), Seconds(10.0));
+    policy->SetTargetRouteSatellites(Ipv4Address("10.1.0.1"), Ipv4Address("10.2.0.1"), {});
+    const bool routeInactiveAccepted = compromisedDevice->Send(
+        CreateIpv4TestPacket(Ipv4Address("10.1.0.1"), Ipv4Address("10.2.0.1")),
+        peerDevice->GetAddress(),
+        0x0800);
+    Simulator::Run();
+    NS_TEST_EXPECT_MSG_EQ(routeInactiveAccepted,
+                          true,
+                          "Target packet should be forwarded when the compromised satellite is not route-active");
+    NS_TEST_EXPECT_MSG_EQ(counters.receiveCount,
+                          3u,
+                          "Route-inactive target packet should be delivered");
+    NS_TEST_EXPECT_MSG_EQ(counters.dropDecisionCount,
+                          1u,
+                          "Route-inactive target packet should not emit a drop decision");
+    NS_TEST_EXPECT_MSG_GT(counters.forwardDecisionCount,
+                          0u,
+                          "Forward decisions should be emitted for matching target packets that are not dropped");
+
     Simulator::Destroy();
 }
 

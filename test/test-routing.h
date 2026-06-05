@@ -212,4 +212,17 @@ class OrbitShieldRouteMembershipTest : public ns3::TestCase
     void DoRun() override;
 };
 
+/**
+ * \brief Test case for route-conditioned grayhole forwarding policy
+ */
+class OrbitShieldGrayholePolicyTest : public ns3::TestCase
+{
+  public:
+    OrbitShieldGrayholePolicyTest();
+    ~OrbitShieldGrayholePolicyTest() override;
+
+  private:
+    void DoRun() override;
+};
+
 #endif /* TEST_ROUTING_H */
