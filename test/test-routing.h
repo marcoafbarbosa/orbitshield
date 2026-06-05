@@ -238,4 +238,30 @@ class OrbitShieldScenario3TelemetryTest : public ns3::TestCase
     void DoRun() override;
 };
 
+/**
+ * \brief Test case for route recomputation with excluded satellites
+ */
+class OrbitShieldRouteExclusionTest : public ns3::TestCase
+{
+  public:
+    OrbitShieldRouteExclusionTest();
+    ~OrbitShieldRouteExclusionTest() override;
+
+  private:
+    void DoRun() override;
+};
+
+/**
+ * \brief Test case for deterministic Scenario 3 detector scoring
+ */
+class OrbitShieldScenario3DetectorTest : public ns3::TestCase
+{
+  public:
+    OrbitShieldScenario3DetectorTest();
+    ~OrbitShieldScenario3DetectorTest() override;
+
+  private:
+    void DoRun() override;
+};
+
 #endif /* TEST_ROUTING_H */

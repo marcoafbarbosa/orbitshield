@@ -15,6 +15,7 @@
 #include <cstdint>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace ns3
@@ -61,6 +62,11 @@ class OrbitShieldRoutingHelper
      */
     void RecomputeRoutes(Ptr<Constellation> constellation);
 
+    void SetExcludedSatellites(const std::vector<std::string>& satelliteNames);
+    void AddExcludedSatellite(const std::string& satelliteName);
+    void ClearExcludedSatellites();
+    std::vector<std::string> GetExcludedSatellites() const;
+
     /**
      * \brief Get the last recomputed node path for a source/destination route.
      *
@@ -104,7 +110,10 @@ class OrbitShieldRoutingHelper
       std::size_t operator()(const RoutePathKey& key) const;
     };
 
+    bool IsExcludedSatellite(Ptr<Node> node) const;
+
     std::unordered_map<RoutePathKey, std::vector<Ptr<Node>>, RoutePathKeyHash> m_lastRoutePaths;
+    std::unordered_set<std::string> m_excludedSatellites;
 };
 
 }  // namespace ns3

@@ -328,6 +328,49 @@ ReadTextLines(const std::string& path)
     return lines;
 }
 
+std::vector<std::string>
+CollectTransitSatelliteNames(const std::vector<Ptr<Node>>& path)
+{
+    std::vector<std::string> satelliteNames;
+    if (path.size() <= 2)
+    {
+        return satelliteNames;
+    }
+
+    for (std::size_t pathIndex = 1; pathIndex + 1 < path.size(); ++pathIndex)
+    {
+        Ptr<Satellite> satellite = DynamicCast<Satellite>(path[pathIndex]);
+        if (satellite)
+        {
+            satelliteNames.push_back(satellite->GetName());
+        }
+    }
+    return satelliteNames;
+}
+
+bool
+PathContainsSatellite(const std::vector<Ptr<Node>>& path, const std::string& satelliteName)
+{
+    const auto satelliteNames = CollectTransitSatelliteNames(path);
+    return std::find(satelliteNames.begin(), satelliteNames.end(), satelliteName) != satelliteNames.end();
+}
+
+OrbitShieldScenario3FlowSample
+MakeDetectorSample(uint32_t sent, uint32_t replies, bool attackActive)
+{
+    OrbitShieldScenario3FlowSample sample;
+    sample.time = attackActive ? Seconds(150.0) : Seconds(50.0);
+    sample.flowId = attackActive ? "target" : "background";
+    sample.source = "Tempe";
+    sample.destination = "Fairbanks";
+    sample.sent = sent;
+    sample.replies = replies;
+    sample.pdr = sent == 0 ? 0.0 : static_cast<double>(replies) / static_cast<double>(sent);
+    sample.rtt = MilliSeconds(100);
+    sample.attackActive = attackActive;
+    return sample;
+}
+
 uint32_t
 ComputeStaticHostRouteHopCount(Ptr<Node> source,
                                Ptr<Node> destinationNode,
@@ -908,6 +951,151 @@ OrbitShieldScenario3TelemetryTest::DoRun()
     NS_TEST_EXPECT_MSG_EQ(mitigationLines.front(),
                           std::string("time_seconds,node_name,action,reason"),
                           "mitigation_events.csv header should be stable");
+}
+
+OrbitShieldRouteExclusionTest::OrbitShieldRouteExclusionTest()
+    : TestCase("OrbitShieldRouteExclusionTest")
+{
+}
+
+OrbitShieldRouteExclusionTest::~OrbitShieldRouteExclusionTest()
+{
+}
+
+void
+OrbitShieldRouteExclusionTest::DoRun()
+{
+    Ptr<Constellation> constellation = CreateObject<Constellation>();
+    constellation->LoadFromRingFile("contrib/orbitshield/data/iridium-20260312.yaml");
+    constellation->SetIslRefreshInterval(Seconds(30.0));
+    constellation->CreateIslLinks(2000000.0);
+    constellation->CreateGroundLinks(50000000.0);
+    constellation->RefreshIslTopology();
+
+    OrbitShieldRoutingHelper routingHelper;
+    routingHelper.Install(constellation);
+
+    Ptr<GroundStation> tempe = FindGroundStationByName(constellation->GetGroundStations(), "Tempe");
+    Ptr<GroundStation> fairbanks =
+        FindGroundStationByName(constellation->GetGroundStations(), "Fairbanks");
+    NS_TEST_ASSERT_MSG_NE(tempe, nullptr, "Tempe ground station must exist in Iridium dataset");
+    NS_TEST_ASSERT_MSG_NE(fairbanks, nullptr, "Fairbanks ground station must exist in Iridium dataset");
+
+    const Ipv4Address destination = GetFirstNonLoopbackAddress(fairbanks);
+    NS_TEST_ASSERT_MSG_NE(destination,
+                          Ipv4Address::GetZero(),
+                          "Fairbanks must have a routable address after Install");
+
+    const auto originalPath = routingHelper.GetRoutePath(tempe, destination);
+    const auto originalTransitSatellites = CollectTransitSatelliteNames(originalPath);
+    NS_TEST_ASSERT_MSG_GT(originalTransitSatellites.size(),
+                          0u,
+                          "Initial target route should include satellite transit nodes");
+
+    std::string excludedWithAlternate;
+    std::vector<Ptr<Node>> alternatePath;
+    for (const auto& candidateSatellite : originalTransitSatellites)
+    {
+        routingHelper.ClearExcludedSatellites();
+        routingHelper.AddExcludedSatellite(candidateSatellite);
+        routingHelper.RecomputeRoutes(constellation);
+        const auto candidatePath = routingHelper.GetRoutePath(tempe, destination);
+        if (!candidatePath.empty() && !PathContainsSatellite(candidatePath, candidateSatellite))
+        {
+            excludedWithAlternate = candidateSatellite;
+            alternatePath = candidatePath;
+            break;
+        }
+    }
+
+    NS_TEST_ASSERT_MSG_NE(excludedWithAlternate,
+                          std::string(),
+                          "At least one original transit satellite should have an alternate route");
+    NS_TEST_EXPECT_MSG_EQ(PathContainsSatellite(alternatePath, excludedWithAlternate),
+                          false,
+                          "Excluded satellite should not appear in recomputed alternate route");
+    const auto excludedSatellites = routingHelper.GetExcludedSatellites();
+    NS_TEST_ASSERT_MSG_EQ(excludedSatellites.size(),
+                          1u,
+                          "Routing helper should report one excluded satellite");
+    NS_TEST_EXPECT_MSG_EQ(excludedSatellites.front(),
+                          excludedWithAlternate,
+                          "Routing helper should report the selected excluded satellite");
+
+    std::vector<std::string> allSatelliteNames;
+    for (const auto& satellite : constellation->GetSatellites())
+    {
+        allSatelliteNames.push_back(satellite->GetName());
+    }
+    routingHelper.SetExcludedSatellites(allSatelliteNames);
+    routingHelper.RecomputeRoutes(constellation);
+    NS_TEST_EXPECT_MSG_EQ(routingHelper.GetRoutePath(tempe, destination).empty(),
+                          true,
+                          "No path should remain when every satellite is excluded");
+
+    Ipv4StaticRoutingHelper staticRoutingHelper;
+    Ptr<Ipv4StaticRouting> staticRouting = staticRoutingHelper.GetStaticRouting(tempe->GetObject<Ipv4>());
+    Ipv4RoutingTableEntry staleRoute;
+    NS_TEST_EXPECT_MSG_EQ(FindHostRoute(staticRouting, destination, staleRoute),
+                          false,
+                          "Unreachable destination should not retain a stale host route");
+
+    Simulator::Destroy();
+}
+
+OrbitShieldScenario3DetectorTest::OrbitShieldScenario3DetectorTest()
+    : TestCase("OrbitShieldScenario3DetectorTest")
+{
+}
+
+OrbitShieldScenario3DetectorTest::~OrbitShieldScenario3DetectorTest()
+{
+}
+
+void
+OrbitShieldScenario3DetectorTest::DoRun()
+{
+    OrbitShieldScenario3Detector detector;
+    detector.SetMinSamples(3);
+    detector.SetTargetPdrThreshold(0.6);
+    detector.SetScoreThreshold(1.0);
+    detector.SetMaxFlaggedSatellites(4);
+
+    detector.ObserveWindow(MakeDetectorSample(5, 1, true),
+                           {"IRIDIUM 113", "IRIDIUM 116"},
+                           true);
+    detector.ObserveWindow(MakeDetectorSample(5, 0, true), {"IRIDIUM 120"}, false);
+    detector.ObserveWindow(MakeDetectorSample(5, 5, false), {"IRIDIUM 130"}, true);
+    detector.ObserveWindow(MakeDetectorSample(2, 0, true), {"IRIDIUM 131"}, true);
+
+    const auto flaggedSatellites = detector.GetFlaggedSatellites();
+    NS_TEST_ASSERT_MSG_EQ(flaggedSatellites.size(),
+                          2u,
+                          "Only satellites on low-PDR target routes should be flagged");
+    NS_TEST_EXPECT_MSG_EQ(flaggedSatellites[0],
+                          std::string("IRIDIUM 113"),
+                          "First target route satellite should be flagged");
+    NS_TEST_EXPECT_MSG_EQ(flaggedSatellites[1],
+                          std::string("IRIDIUM 116"),
+                          "Second target route satellite should be flagged");
+    NS_TEST_EXPECT_MSG_EQ(detector.GetScore("IRIDIUM 120"),
+                          0.0,
+                          "Non-target traffic should not create detector score");
+    NS_TEST_EXPECT_MSG_EQ(detector.GetScore("IRIDIUM 130"),
+                          0.0,
+                          "Healthy target window should not create detector score");
+    NS_TEST_EXPECT_MSG_EQ(detector.GetScore("IRIDIUM 131"),
+                          0.0,
+                          "Windows below the minimum sample count should not create detector score");
+
+    detector.SetMaxFlaggedSatellites(1);
+    NS_TEST_EXPECT_MSG_EQ(detector.GetFlaggedSatellites().size(),
+                          1u,
+                          "Detector should respect the mitigation exclusion cap");
+    detector.SetMaxFlaggedSatellites(0);
+    NS_TEST_EXPECT_MSG_EQ(detector.GetFlaggedSatellites().empty(),
+                          true,
+                          "Detector should allow zero configured exclusions");
 }
 
 OrbitShieldGrayholePolicyTest::OrbitShieldGrayholePolicyTest()

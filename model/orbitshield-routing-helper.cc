@@ -217,6 +217,43 @@ OrbitShieldRoutingHelper::GetTransitSatelliteNames(Ptr<Node> source,
 }
 
 void
+OrbitShieldRoutingHelper::SetExcludedSatellites(const std::vector<std::string>& satelliteNames)
+{
+    m_excludedSatellites.clear();
+    for (const auto& satelliteName : satelliteNames)
+    {
+        m_excludedSatellites.insert(satelliteName);
+    }
+}
+
+void
+OrbitShieldRoutingHelper::AddExcludedSatellite(const std::string& satelliteName)
+{
+    m_excludedSatellites.insert(satelliteName);
+}
+
+void
+OrbitShieldRoutingHelper::ClearExcludedSatellites()
+{
+    m_excludedSatellites.clear();
+}
+
+std::vector<std::string>
+OrbitShieldRoutingHelper::GetExcludedSatellites() const
+{
+    std::vector<std::string> satelliteNames(m_excludedSatellites.begin(), m_excludedSatellites.end());
+    std::sort(satelliteNames.begin(), satelliteNames.end());
+    return satelliteNames;
+}
+
+bool
+OrbitShieldRoutingHelper::IsExcludedSatellite(Ptr<Node> node) const
+{
+    Ptr<Satellite> satellite = DynamicCast<Satellite>(node);
+    return satellite && m_excludedSatellites.count(satellite->GetName()) > 0;
+}
+
+void
 OrbitShieldRoutingHelper::Install(Ptr<Constellation> constellation)
 {
     NS_LOG_FUNCTION(this << constellation);
@@ -345,6 +382,10 @@ OrbitShieldRoutingHelper::RecomputeRoutes(Ptr<Constellation> constellation)
         {
             LinkInterfaceInfo info;
             if (!FindLinkInterfaceInfo(link, info))
+            {
+                continue;
+            }
+            if (IsExcludedSatellite(info.a) || IsExcludedSatellite(info.b))
             {
                 continue;
             }
