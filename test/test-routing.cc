@@ -4,7 +4,7 @@
 
 #include "test-routing.h"
 #include "ns3/orbitshield-module.h"
-#include "ns3/orbitshield-scenario3-config.h"
+#include "ns3/targeted-flow-grayhole-config.h"
 #include "ns3/orbitshield-scenario3-detector.h"
 #include "ns3/orbitshield-scenario3-experiment.h"
 #include "ns3/orbitshield-scenario3-telemetry.h"
@@ -445,7 +445,7 @@ ComputeStaticHostRouteHopCount(Ptr<Node> source,
 }
 
 std::string
-WriteScenario3Profile(const std::string& filename, const std::string& body)
+WriteTargetedFlowGrayholeProfile(const std::string& filename, const std::string& body)
 {
     const std::string path = filename;
     std::ofstream output(path);
@@ -917,7 +917,7 @@ OrbitShieldScenario3TelemetryTest::DoRun()
                           std::string("flagged"),
                           "Mitigation event should preserve action");
 
-    const std::string outputDir = CreateTempDirFilename("orbitshield-scenario3-telemetry");
+    const std::string outputDir = CreateTempDirFilename("orbitshield-targeted-flow-grayhole-telemetry");
     telemetry.SetOutputDir(outputDir);
     telemetry.SetWriteCsv(true);
     std::string error;
@@ -1114,21 +1114,21 @@ OrbitShieldScenario3ExperimentTest::~OrbitShieldScenario3ExperimentTest()
 void
 OrbitShieldScenario3ExperimentTest::DoRun()
 {
-    OrbitShieldScenario3Config config;
+    OrbitShieldTargetedFlowGrayholeConfig config;
     std::string error;
-    NS_TEST_ASSERT_MSG_EQ(LoadOrbitShieldScenario3Config(
-                              "contrib/orbitshield/data/scenarios/scenario3-grayhole.yaml",
+    NS_TEST_ASSERT_MSG_EQ(LoadOrbitShieldTargetedFlowGrayholeConfig(
+                              "contrib/orbitshield/experiments/targeted-flow-grayhole/profiles/targeted-flow-grayhole.yaml",
                               config,
                               &error),
                           true,
-                          "Default Scenario 3 profile should load: " << error);
+                          "Default targeted-flow grayhole profile should load: " << error);
 
     config.simulation.durationSeconds = 300.0;
     config.attack.startSeconds = 60.0;
     config.attack.stopSeconds = 240.0;
     config.detection.windowSeconds = 60.0;
     config.attack.dropProbability = 1.0;
-    config.telemetry.outputDir = CreateTempDirFilename("orbitshield-scenario3-experiment");
+    config.telemetry.outputDir = CreateTempDirFilename("orbitshield-targeted-flow-grayhole-experiment");
 
     Ptr<Constellation> experimentConstellation = CreateObject<Constellation>();
     experimentConstellation->LoadFromRingFile(config.constellation.ringFile);
@@ -1160,9 +1160,9 @@ OrbitShieldScenario3ExperimentTest::DoRun()
                           1u,
                           "Mitigation-enabled experiment should write mitigation CSV rows");
 
-    OrbitShieldScenario3Config noMitigation = config;
+    OrbitShieldTargetedFlowGrayholeConfig noMitigation = config;
     noMitigation.mitigation.enabled = false;
-    noMitigation.telemetry.outputDir = CreateTempDirFilename("orbitshield-scenario3-experiment-no-mitigation");
+    noMitigation.telemetry.outputDir = CreateTempDirFilename("orbitshield-targeted-flow-grayhole-experiment-no-mitigation");
     OrbitShieldScenario3ExperimentSummary noMitigationSummary;
     NS_TEST_ASSERT_MSG_EQ(RunOrbitShieldScenario3Experiment(noMitigation,
                                                             noMitigationSummary,
@@ -1903,32 +1903,32 @@ OrbitShieldStaticRoutingStrategyTest::DoRun()
     Simulator::Destroy();
 }
 
-OrbitShieldScenario3ConfigTest::OrbitShieldScenario3ConfigTest()
-    : TestCase("OrbitShieldScenario3ConfigTest")
+OrbitShieldTargetedFlowGrayholeConfigTest::OrbitShieldTargetedFlowGrayholeConfigTest()
+    : TestCase("OrbitShieldTargetedFlowGrayholeConfigTest")
 {
 }
 
-OrbitShieldScenario3ConfigTest::~OrbitShieldScenario3ConfigTest()
+OrbitShieldTargetedFlowGrayholeConfigTest::~OrbitShieldTargetedFlowGrayholeConfigTest()
 {
 }
 
 void
-OrbitShieldScenario3ConfigTest::DoRun()
+OrbitShieldTargetedFlowGrayholeConfigTest::DoRun()
 {
-    OrbitShieldScenario3Config config;
+    OrbitShieldTargetedFlowGrayholeConfig config;
     std::string error;
-    const bool loaded = LoadOrbitShieldScenario3Config(
-        "contrib/orbitshield/data/scenarios/scenario3-grayhole.yaml",
+    const bool loaded = LoadOrbitShieldTargetedFlowGrayholeConfig(
+        "contrib/orbitshield/experiments/targeted-flow-grayhole/profiles/targeted-flow-grayhole.yaml",
         config,
         &error);
 
-    NS_TEST_ASSERT_MSG_EQ(loaded, true, "Default Scenario 3 profile should load: " << error);
+    NS_TEST_ASSERT_MSG_EQ(loaded, true, "Default targeted-flow grayhole profile should load: " << error);
     NS_TEST_EXPECT_MSG_EQ(config.constellation.ringFile,
                           std::string("contrib/orbitshield/data/iridium-20260312.yaml"),
                           "Ring file path should resolve relative to the profile directory");
     NS_TEST_EXPECT_MSG_EQ(config.simulation.durationSeconds,
                           3000.0,
-                          "Default duration should match the Scenario 3 plan");
+                          "Default duration should match the targeted-flow grayhole profile");
     NS_TEST_EXPECT_MSG_EQ(config.simulation.seed, 1u, "Default RNG seed should be 1");
     NS_TEST_EXPECT_MSG_EQ(config.simulation.run, 1u, "Default RNG run should be 1");
     NS_TEST_EXPECT_MSG_EQ(config.topology.islMaxRangeMeters,
@@ -1964,7 +1964,7 @@ OrbitShieldScenario3ConfigTest::DoRun()
     NS_TEST_EXPECT_MSG_EQ(config.attack.targetPairs.front().destination,
                           std::string("Fairbanks"),
                           "Default target destination should be Fairbanks");
-    NS_TEST_EXPECT_MSG_EQ(OrbitShieldScenario3DirectionToString(config.attack.direction),
+    NS_TEST_EXPECT_MSG_EQ(OrbitShieldTargetedFlowGrayholeDirectionToString(config.attack.direction),
                           std::string("bidirectional"),
                           "Default attack direction should be bidirectional");
     NS_TEST_EXPECT_MSG_EQ(config.attack.startSeconds,
@@ -1997,7 +1997,7 @@ OrbitShieldScenario3ConfigTest::DoRun()
                           4u,
                           "Default mitigation exclusion cap should be 4");
     NS_TEST_EXPECT_MSG_EQ(config.telemetry.outputDir,
-                          std::string("contrib/orbitshield/data/scenarios/results/scenario3"),
+                          std::string("contrib/orbitshield/experiments/targeted-flow-grayhole/profiles/results/targeted-flow-grayhole"),
                           "Telemetry output directory should resolve relative to the profile directory");
     NS_TEST_EXPECT_MSG_EQ(config.telemetry.routeSnapshotIntervalSeconds,
                           30.0,
@@ -2006,7 +2006,7 @@ OrbitShieldScenario3ConfigTest::DoRun()
 
     Ptr<Constellation> constellation = CreateObject<Constellation>();
     constellation->LoadFromRingFile(config.constellation.ringFile);
-    NS_TEST_EXPECT_MSG_EQ(ValidateOrbitShieldScenario3Config(config, constellation, &error),
+    NS_TEST_EXPECT_MSG_EQ(ValidateOrbitShieldTargetedFlowGrayholeConfig(config, constellation, &error),
                           true,
                           "Default profile should validate against the Iridium constellation: " << error);
 
@@ -2033,8 +2033,8 @@ OrbitShieldScenario3ConfigTest::DoRun()
         "    - source: Tempe\n"
         "      destination: Fairbanks\n";
 
-    const std::string oneCompromisedPath = WriteScenario3Profile(
-        CreateTempDirFilename("orbitshield-scenario3-one.yaml"),
+    const std::string oneCompromisedPath = WriteTargetedFlowGrayholeProfile(
+        CreateTempDirFilename("orbitshield-targeted-flow-grayhole-one.yaml"),
         commonPrefix +
             "  compromisedSatellites:\n"
             "    - IRIDIUM 113\n"
@@ -2043,8 +2043,8 @@ OrbitShieldScenario3ConfigTest::DoRun()
             "  stopSeconds: 600\n"
             "mitigation:\n"
             "  enabled: false\n");
-    OrbitShieldScenario3Config oneCompromised;
-    NS_TEST_ASSERT_MSG_EQ(LoadOrbitShieldScenario3Config(oneCompromisedPath,
+    OrbitShieldTargetedFlowGrayholeConfig oneCompromised;
+    NS_TEST_ASSERT_MSG_EQ(LoadOrbitShieldTargetedFlowGrayholeConfig(oneCompromisedPath,
                                                          oneCompromised,
                                                          &error),
                           true,
@@ -2052,18 +2052,18 @@ OrbitShieldScenario3ConfigTest::DoRun()
     NS_TEST_EXPECT_MSG_EQ(oneCompromised.attack.compromisedSatellites.size(),
                           1u,
                           "Variant should keep one compromised satellite");
-    NS_TEST_EXPECT_MSG_EQ(OrbitShieldScenario3DirectionToString(oneCompromised.attack.direction),
+    NS_TEST_EXPECT_MSG_EQ(OrbitShieldTargetedFlowGrayholeDirectionToString(oneCompromised.attack.direction),
                           std::string("forward"),
                           "Variant should parse forward direction");
     NS_TEST_EXPECT_MSG_EQ(oneCompromised.mitigation.enabled,
                           false,
                           "Variant should allow disabled mitigation");
-    NS_TEST_EXPECT_MSG_EQ(ValidateOrbitShieldScenario3Config(oneCompromised, constellation, &error),
+    NS_TEST_EXPECT_MSG_EQ(ValidateOrbitShieldTargetedFlowGrayholeConfig(oneCompromised, constellation, &error),
                           true,
                           "One-satellite variant should validate: " << error);
 
-    const std::string twoCompromisedPath = WriteScenario3Profile(
-        CreateTempDirFilename("orbitshield-scenario3-two.yaml"),
+    const std::string twoCompromisedPath = WriteTargetedFlowGrayholeProfile(
+        CreateTempDirFilename("orbitshield-targeted-flow-grayhole-two.yaml"),
         commonPrefix +
             "  compromisedSatellites:\n"
             "    - IRIDIUM 113\n"
@@ -2073,8 +2073,8 @@ OrbitShieldScenario3ConfigTest::DoRun()
             "  stopSeconds: 300\n"
             "detection:\n"
             "  minSamples: 4\n");
-    OrbitShieldScenario3Config twoCompromised;
-    NS_TEST_ASSERT_MSG_EQ(LoadOrbitShieldScenario3Config(twoCompromisedPath,
+    OrbitShieldTargetedFlowGrayholeConfig twoCompromised;
+    NS_TEST_ASSERT_MSG_EQ(LoadOrbitShieldTargetedFlowGrayholeConfig(twoCompromisedPath,
                                                          twoCompromised,
                                                          &error),
                           true,
@@ -2082,18 +2082,18 @@ OrbitShieldScenario3ConfigTest::DoRun()
     NS_TEST_EXPECT_MSG_EQ(twoCompromised.attack.compromisedSatellites.size(),
                           2u,
                           "Variant should parse two compromised satellites");
-    NS_TEST_EXPECT_MSG_EQ(OrbitShieldScenario3DirectionToString(twoCompromised.attack.direction),
+    NS_TEST_EXPECT_MSG_EQ(OrbitShieldTargetedFlowGrayholeDirectionToString(twoCompromised.attack.direction),
                           std::string("reverse"),
                           "Variant should parse reverse direction");
     NS_TEST_EXPECT_MSG_EQ(twoCompromised.detection.minSamples,
                           4u,
                           "Variant should parse detector sample override");
-    NS_TEST_EXPECT_MSG_EQ(ValidateOrbitShieldScenario3Config(twoCompromised, constellation, &error),
+    NS_TEST_EXPECT_MSG_EQ(ValidateOrbitShieldTargetedFlowGrayholeConfig(twoCompromised, constellation, &error),
                           true,
                           "Two-satellite variant should validate: " << error);
 
-    const std::string fourCompromisedPath = WriteScenario3Profile(
-        CreateTempDirFilename("orbitshield-scenario3-four.yaml"),
+    const std::string fourCompromisedPath = WriteTargetedFlowGrayholeProfile(
+        CreateTempDirFilename("orbitshield-targeted-flow-grayhole-four.yaml"),
         commonPrefix +
             "  compromisedSatellites:\n"
             "    - IRIDIUM 113\n"
@@ -2105,8 +2105,8 @@ OrbitShieldScenario3ConfigTest::DoRun()
             "  stopSeconds: 840\n"
             "mitigation:\n"
             "  maxExcludedSatellites: 4\n");
-    OrbitShieldScenario3Config fourCompromised;
-    NS_TEST_ASSERT_MSG_EQ(LoadOrbitShieldScenario3Config(fourCompromisedPath,
+    OrbitShieldTargetedFlowGrayholeConfig fourCompromised;
+    NS_TEST_ASSERT_MSG_EQ(LoadOrbitShieldTargetedFlowGrayholeConfig(fourCompromisedPath,
                                                          fourCompromised,
                                                          &error),
                           true,
@@ -2117,56 +2117,56 @@ OrbitShieldScenario3ConfigTest::DoRun()
     NS_TEST_EXPECT_MSG_EQ(fourCompromised.mitigation.maxExcludedSatellites,
                           4u,
                           "Variant should parse mitigation exclusion cap");
-    NS_TEST_EXPECT_MSG_EQ(ValidateOrbitShieldScenario3Config(fourCompromised, constellation, &error),
+    NS_TEST_EXPECT_MSG_EQ(ValidateOrbitShieldTargetedFlowGrayholeConfig(fourCompromised, constellation, &error),
                           true,
                           "Four-satellite variant should validate: " << error);
 
-    const std::string invalidDirectionPath = WriteScenario3Profile(
-        CreateTempDirFilename("orbitshield-scenario3-invalid-direction.yaml"),
+    const std::string invalidDirectionPath = WriteTargetedFlowGrayholeProfile(
+        CreateTempDirFilename("orbitshield-targeted-flow-grayhole-invalid-direction.yaml"),
         commonPrefix +
             "  compromisedSatellites:\n"
             "    - IRIDIUM 113\n"
             "  direction: sideways\n"
             "  startSeconds: 60\n"
             "  stopSeconds: 600\n");
-    OrbitShieldScenario3Config invalidDirection;
+    OrbitShieldTargetedFlowGrayholeConfig invalidDirection;
     error.clear();
-    NS_TEST_EXPECT_MSG_EQ(LoadOrbitShieldScenario3Config(invalidDirectionPath,
+    NS_TEST_EXPECT_MSG_EQ(LoadOrbitShieldTargetedFlowGrayholeConfig(invalidDirectionPath,
                                                         invalidDirection,
                                                         &error),
                           false,
                           "Invalid direction should fail cleanly");
     NS_TEST_EXPECT_MSG_NE(error.empty(), true, "Invalid profile should provide an error message");
 
-    const std::string invalidRangePath = WriteScenario3Profile(
-        CreateTempDirFilename("orbitshield-scenario3-invalid-range.yaml"),
+    const std::string invalidRangePath = WriteTargetedFlowGrayholeProfile(
+        CreateTempDirFilename("orbitshield-targeted-flow-grayhole-invalid-range.yaml"),
         commonPrefix +
             "  compromisedSatellites:\n"
             "    - IRIDIUM 113\n"
             "  startSeconds: 800\n"
             "  stopSeconds: 600\n");
-    OrbitShieldScenario3Config invalidRange;
+    OrbitShieldTargetedFlowGrayholeConfig invalidRange;
     error.clear();
-    NS_TEST_EXPECT_MSG_EQ(LoadOrbitShieldScenario3Config(invalidRangePath, invalidRange, &error),
+    NS_TEST_EXPECT_MSG_EQ(LoadOrbitShieldTargetedFlowGrayholeConfig(invalidRangePath, invalidRange, &error),
                           false,
                           "Invalid attack timing should fail cleanly");
     NS_TEST_EXPECT_MSG_NE(error.empty(), true, "Invalid timing should provide an error message");
 
-    const std::string unknownSatellitePath = WriteScenario3Profile(
-        CreateTempDirFilename("orbitshield-scenario3-unknown-satellite.yaml"),
+    const std::string unknownSatellitePath = WriteTargetedFlowGrayholeProfile(
+        CreateTempDirFilename("orbitshield-targeted-flow-grayhole-unknown-satellite.yaml"),
         commonPrefix +
             "  compromisedSatellites:\n"
             "    - UNKNOWN SATELLITE\n"
             "  startSeconds: 60\n"
             "  stopSeconds: 600\n");
-    OrbitShieldScenario3Config unknownSatellite;
-    NS_TEST_ASSERT_MSG_EQ(LoadOrbitShieldScenario3Config(unknownSatellitePath,
+    OrbitShieldTargetedFlowGrayholeConfig unknownSatellite;
+    NS_TEST_ASSERT_MSG_EQ(LoadOrbitShieldTargetedFlowGrayholeConfig(unknownSatellitePath,
                                                          unknownSatellite,
                                                          &error),
                           true,
                           "Name validation should be deferred until a constellation is loaded");
     error.clear();
-    NS_TEST_EXPECT_MSG_EQ(ValidateOrbitShieldScenario3Config(unknownSatellite,
+    NS_TEST_EXPECT_MSG_EQ(ValidateOrbitShieldTargetedFlowGrayholeConfig(unknownSatellite,
                                                             constellation,
                                                             &error),
                           false,

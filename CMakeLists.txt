@@ -27,7 +27,7 @@ build_lib(
     model/isl-propagation-delay-model.cc
     model/orbitshield-grayhole-policy.cc
     model/orbitshield-routing-helper.cc
-    model/orbitshield-scenario3-config.cc
+    experiments/targeted-flow-grayhole/targeted-flow-grayhole-config.cc
     model/orbitshield-scenario3-detector.cc
     model/orbitshield-scenario3-experiment.cc
     model/orbitshield-scenario3-telemetry.cc
@@ -42,7 +42,7 @@ build_lib(
     model/isl-propagation-delay-model.h
     model/orbitshield-grayhole-policy.h
     model/orbitshield-routing-helper.h
-    model/orbitshield-scenario3-config.h
+    experiments/targeted-flow-grayhole/targeted-flow-grayhole-config.h
     model/orbitshield-scenario3-detector.h
     model/orbitshield-scenario3-experiment.h
     model/orbitshield-scenario3-telemetry.h

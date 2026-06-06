@@ -12,7 +12,7 @@
 namespace ns3
 {
 
-struct OrbitShieldScenario3Config;
+struct OrbitShieldTargetedFlowGrayholeConfig;
 
 struct OrbitShieldScenario3ExperimentSummary
 {
@@ -26,7 +26,7 @@ struct OrbitShieldScenario3ExperimentSummary
     std::string outputDir;
 };
 
-bool RunOrbitShieldScenario3Experiment(const OrbitShieldScenario3Config& config,
+bool RunOrbitShieldScenario3Experiment(const OrbitShieldTargetedFlowGrayholeConfig& config,
                                        OrbitShieldScenario3ExperimentSummary& summary,
                                        std::string* errorMessage = nullptr);
 

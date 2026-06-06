@@ -187,13 +187,13 @@ class OrbitShieldStaticRoutingStrategyTest : public ns3::TestCase
 };
 
 /**
- * \brief Test case for Scenario 3 YAML profile loading and validation
+ * \brief Test case for targeted-flow grayhole YAML profile loading and validation
  */
-class OrbitShieldScenario3ConfigTest : public ns3::TestCase
+class OrbitShieldTargetedFlowGrayholeConfigTest : public ns3::TestCase
 {
   public:
-    OrbitShieldScenario3ConfigTest();
-    ~OrbitShieldScenario3ConfigTest() override;
+    OrbitShieldTargetedFlowGrayholeConfigTest();
+    ~OrbitShieldTargetedFlowGrayholeConfigTest() override;
 
   private:
     void DoRun() override;

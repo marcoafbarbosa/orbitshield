@@ -2,10 +2,10 @@
  * Copyright (c) 2026 Marco A. F. Barbosa
  */
 
-#include "orbitshield-scenario3-config.h"
+#include "targeted-flow-grayhole-config.h"
 
-#include "ground-station.h"
-#include "satellite.h"
+#include "ns3/ground-station.h"
+#include "ns3/satellite.h"
 
 #include "ns3/log.h"
 
@@ -20,7 +20,7 @@
 namespace ns3
 {
 
-NS_LOG_COMPONENT_DEFINE("OrbitShieldScenario3Config");
+NS_LOG_COMPONENT_DEFINE("OrbitShieldTargetedFlowGrayholeConfig");
 
 namespace
 {
@@ -31,10 +31,10 @@ DefaultGroundStations()
     return {"Tempe", "Fairbanks", "Svalbard", "Izhevsk", "Punta Arenas"};
 }
 
-std::vector<OrbitShieldScenario3GroundPair>
+std::vector<OrbitShieldTargetedFlowGrayholeGroundPair>
 DefaultTrafficPairs()
 {
-    std::vector<OrbitShieldScenario3GroundPair> pairs;
+    std::vector<OrbitShieldTargetedFlowGrayholeGroundPair> pairs;
     const auto stations = DefaultGroundStations();
     for (std::size_t sourceIndex = 0; sourceIndex < stations.size(); ++sourceIndex)
     {
@@ -48,15 +48,15 @@ DefaultTrafficPairs()
     return pairs;
 }
 
-OrbitShieldScenario3Config
+OrbitShieldTargetedFlowGrayholeConfig
 MakeDefaultConfig()
 {
-    OrbitShieldScenario3Config config;
-    config.constellation.ringFile = "../iridium-20260312.yaml";
+    OrbitShieldTargetedFlowGrayholeConfig config;
+    config.constellation.ringFile = "../../../data/iridium-20260312.yaml";
     config.traffic.pairs = DefaultTrafficPairs();
     config.attack.compromisedSatellites = {"IRIDIUM 113"};
     config.attack.targetPairs = {{"Tempe", "Fairbanks"}};
-    config.telemetry.outputDir = "results/scenario3";
+    config.telemetry.outputDir = "results/targeted-flow-grayhole";
     return config;
 }
 
@@ -184,7 +184,7 @@ RequireMap(const YAML::Node& node, const std::string& name, std::string* errorMe
 
 bool
 LoadPairList(const YAML::Node& node,
-             std::vector<OrbitShieldScenario3GroundPair>& pairs,
+             std::vector<OrbitShieldTargetedFlowGrayholeGroundPair>& pairs,
              const std::string& fieldName,
              std::string* errorMessage)
 {
@@ -198,7 +198,7 @@ LoadPairList(const YAML::Node& node,
         return false;
     }
 
-    std::vector<OrbitShieldScenario3GroundPair> parsed;
+    std::vector<OrbitShieldTargetedFlowGrayholeGroundPair> parsed;
     for (const auto& pairNode : node)
     {
         if (!pairNode.IsMap() || !pairNode["source"] || !pairNode["destination"])
@@ -239,22 +239,22 @@ LoadStringList(const YAML::Node& node,
 
 bool
 ParseDirection(const std::string& value,
-               OrbitShieldScenario3Direction& direction,
+               OrbitShieldTargetedFlowGrayholeDirection& direction,
                std::string* errorMessage)
 {
     if (value == "forward")
     {
-        direction = OrbitShieldScenario3Direction::FORWARD;
+        direction = OrbitShieldTargetedFlowGrayholeDirection::FORWARD;
         return true;
     }
     if (value == "reverse")
     {
-        direction = OrbitShieldScenario3Direction::REVERSE;
+        direction = OrbitShieldTargetedFlowGrayholeDirection::REVERSE;
         return true;
     }
     if (value == "bidirectional")
     {
-        direction = OrbitShieldScenario3Direction::BIDIRECTIONAL;
+        direction = OrbitShieldTargetedFlowGrayholeDirection::BIDIRECTIONAL;
         return true;
     }
     SetError(errorMessage, "attack.direction must be forward, reverse, or bidirectional");
@@ -284,7 +284,7 @@ RequireUnitInterval(double value, const std::string& fieldName, std::string* err
 }
 
 bool
-ValidateRawValues(const OrbitShieldScenario3Config& config, std::string* errorMessage)
+ValidateRawValues(const OrbitShieldTargetedFlowGrayholeConfig& config, std::string* errorMessage)
 {
     if (!RequirePositive(config.simulation.durationSeconds, "simulation.durationSeconds", errorMessage) ||
         !RequirePositive(config.topology.islMaxRangeMeters, "topology.islMaxRangeMeters", errorMessage) ||
@@ -418,7 +418,7 @@ SatelliteNames(Ptr<Constellation> constellation)
 }
 
 bool
-ValidateGroundPairNames(const std::vector<OrbitShieldScenario3GroundPair>& pairs,
+ValidateGroundPairNames(const std::vector<OrbitShieldTargetedFlowGrayholeGroundPair>& pairs,
                         const std::unordered_set<std::string>& groundNames,
                         const std::string& fieldName,
                         std::string* errorMessage)
@@ -441,7 +441,7 @@ ValidateGroundPairNames(const std::vector<OrbitShieldScenario3GroundPair>& pairs
 }
 
 std::string
-PairKey(const OrbitShieldScenario3GroundPair& pair)
+PairKey(const OrbitShieldTargetedFlowGrayholeGroundPair& pair)
 {
     return pair.source + "->" + pair.destination;
 }
@@ -449,23 +449,23 @@ PairKey(const OrbitShieldScenario3GroundPair& pair)
 } // namespace
 
 std::string
-OrbitShieldScenario3DirectionToString(OrbitShieldScenario3Direction direction)
+OrbitShieldTargetedFlowGrayholeDirectionToString(OrbitShieldTargetedFlowGrayholeDirection direction)
 {
     switch (direction)
     {
-    case OrbitShieldScenario3Direction::FORWARD:
+    case OrbitShieldTargetedFlowGrayholeDirection::FORWARD:
         return "forward";
-    case OrbitShieldScenario3Direction::REVERSE:
+    case OrbitShieldTargetedFlowGrayholeDirection::REVERSE:
         return "reverse";
-    case OrbitShieldScenario3Direction::BIDIRECTIONAL:
+    case OrbitShieldTargetedFlowGrayholeDirection::BIDIRECTIONAL:
         return "bidirectional";
     }
     return "bidirectional";
 }
 
 bool
-LoadOrbitShieldScenario3Config(const std::string& filename,
-                               OrbitShieldScenario3Config& config,
+LoadOrbitShieldTargetedFlowGrayholeConfig(const std::string& filename,
+                               OrbitShieldTargetedFlowGrayholeConfig& config,
                                std::string* errorMessage)
 {
     NS_LOG_FUNCTION(filename);
@@ -473,7 +473,7 @@ LoadOrbitShieldScenario3Config(const std::string& filename,
     std::ifstream file(filename);
     if (!file.is_open())
     {
-        SetError(errorMessage, "Could not open Scenario 3 profile: " + filename);
+        SetError(errorMessage, "Could not open targeted-flow grayhole profile: " + filename);
         return false;
     }
 
@@ -481,7 +481,7 @@ LoadOrbitShieldScenario3Config(const std::string& filename,
     buffer << file.rdbuf();
     const std::string basePath = DirectoryName(filename);
 
-    OrbitShieldScenario3Config parsed = MakeDefaultConfig();
+    OrbitShieldTargetedFlowGrayholeConfig parsed = MakeDefaultConfig();
     parsed.profilePath = filename;
 
     try
@@ -489,7 +489,7 @@ LoadOrbitShieldScenario3Config(const std::string& filename,
         YAML::Node root = YAML::Load(buffer.str());
         if (!root || !root.IsMap())
         {
-            SetError(errorMessage, "Scenario 3 profile must be a YAML map");
+            SetError(errorMessage, "targeted-flow grayhole profile must be a YAML map");
             return false;
         }
 
@@ -679,7 +679,7 @@ LoadOrbitShieldScenario3Config(const std::string& filename,
     }
     catch (const YAML::Exception& error)
     {
-        SetError(errorMessage, std::string("Failed to parse Scenario 3 profile: ") + error.what());
+        SetError(errorMessage, std::string("Failed to parse targeted-flow grayhole profile: ") + error.what());
         return false;
     }
 
@@ -696,7 +696,7 @@ LoadOrbitShieldScenario3Config(const std::string& filename,
 }
 
 bool
-ValidateOrbitShieldScenario3Config(const OrbitShieldScenario3Config& config,
+ValidateOrbitShieldTargetedFlowGrayholeConfig(const OrbitShieldTargetedFlowGrayholeConfig& config,
                                    Ptr<Constellation> constellation,
                                    std::string* errorMessage)
 {

@@ -6,7 +6,7 @@
 
 #include "ground-station.h"
 #include "orbitshield-routing-helper.h"
-#include "orbitshield-scenario3-config.h"
+#include "../experiments/targeted-flow-grayhole/targeted-flow-grayhole-config.h"
 #include "orbitshield-scenario3-detector.h"
 #include "orbitshield-scenario3-telemetry.h"
 #include "satellite-link.h"
@@ -115,7 +115,7 @@ RepliesFromPdr(uint32_t sent, double pdr)
 } // namespace
 
 bool
-RunOrbitShieldScenario3Experiment(const OrbitShieldScenario3Config& config,
+RunOrbitShieldScenario3Experiment(const OrbitShieldTargetedFlowGrayholeConfig& config,
                                   OrbitShieldScenario3ExperimentSummary& summary,
                                   std::string* errorMessage)
 {
@@ -127,7 +127,7 @@ RunOrbitShieldScenario3Experiment(const OrbitShieldScenario3Config& config,
 
     Ptr<Constellation> constellation = CreateObject<Constellation>();
     constellation->LoadFromRingFile(config.constellation.ringFile);
-    if (!ValidateOrbitShieldScenario3Config(config, constellation, errorMessage))
+    if (!ValidateOrbitShieldTargetedFlowGrayholeConfig(config, constellation, errorMessage))
     {
         return false;
     }

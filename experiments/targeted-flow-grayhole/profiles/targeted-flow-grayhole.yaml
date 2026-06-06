@@ -1,5 +1,5 @@
 constellation:
-  ringFile: ../iridium-20260312.yaml
+  ringFile: ../../../data/iridium-20260312.yaml
 simulation:
   durationSeconds: 3000.0
   seed: 1
@@ -53,6 +53,6 @@ mitigation:
   applyDelaySeconds: 30.0
   maxExcludedSatellites: 4
 telemetry:
-  outputDir: results/scenario3
+  outputDir: results/targeted-flow-grayhole
   routeSnapshotIntervalSeconds: 30.0
   writeCsv: true

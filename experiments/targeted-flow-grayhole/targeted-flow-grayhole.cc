@@ -4,7 +4,7 @@
 
 #include "ns3/core-module.h"
 #include "ns3/orbitshield-module.h"
-#include "ns3/orbitshield-scenario3-config.h"
+#include "ns3/targeted-flow-grayhole-config.h"
 #include "ns3/orbitshield-scenario3-experiment.h"
 
 #include <algorithm>
@@ -52,7 +52,7 @@ JoinNames(const std::vector<std::string>& names)
 int
 main(int argc, char* argv[])
 {
-    std::string configPath = "contrib/orbitshield/data/scenarios/scenario3-grayhole.yaml";
+    std::string configPath = "contrib/orbitshield/experiments/targeted-flow-grayhole/profiles/targeted-flow-grayhole.yaml";
     double durationSeconds = -1.0;
     double refreshIntervalSeconds = -1.0;
     double attackDropProbability = -1.0;
@@ -60,7 +60,7 @@ main(int argc, char* argv[])
     std::string outputDir;
 
     CommandLine cmd(__FILE__);
-    cmd.AddValue("config", "Path to Scenario 3 YAML profile", configPath);
+    cmd.AddValue("config", "Path to targeted-flow grayhole YAML profile", configPath);
     cmd.AddValue("durationSeconds", "Override simulation duration", durationSeconds);
     cmd.AddValue("refreshIntervalSeconds", "Override topology refresh interval", refreshIntervalSeconds);
     cmd.AddValue("attackDropProbability", "Override attack drop probability", attackDropProbability);
@@ -68,11 +68,11 @@ main(int argc, char* argv[])
     cmd.AddValue("outputDir", "Override telemetry output directory", outputDir);
     cmd.Parse(argc, argv);
 
-    OrbitShieldScenario3Config config;
+    OrbitShieldTargetedFlowGrayholeConfig config;
     std::string error;
-    if (!LoadOrbitShieldScenario3Config(configPath, config, &error))
+    if (!LoadOrbitShieldTargetedFlowGrayholeConfig(configPath, config, &error))
     {
-        std::cerr << "Failed to load Scenario 3 profile: " << error << std::endl;
+        std::cerr << "Failed to load targeted-flow grayhole profile: " << error << std::endl;
         return 1;
     }
 
@@ -115,11 +115,11 @@ main(int argc, char* argv[])
     OrbitShieldScenario3ExperimentSummary summary;
     if (!RunOrbitShieldScenario3Experiment(config, summary, &error))
     {
-        std::cerr << "Scenario 3 run failed: " << error << std::endl;
+        std::cerr << "Targeted-flow grayhole run failed: " << error << std::endl;
         return 1;
     }
 
-    std::cout << "Scenario 3 grayhole run complete" << std::endl;
+    std::cout << "Targeted-flow grayhole run complete" << std::endl;
     std::cout << "Profile: " << configPath << std::endl;
     std::cout << "Duration: " << config.simulation.durationSeconds << " seconds" << std::endl;
     std::cout << "Target pairs: " << config.attack.targetPairs.size() << std::endl;
