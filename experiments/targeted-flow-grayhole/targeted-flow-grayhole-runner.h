@@ -2,8 +2,8 @@
  * Copyright (c) 2026 Marco A. F. Barbosa
  */
 
-#ifndef ORBITSHIELD_SCENARIO3_EXPERIMENT_H
-#define ORBITSHIELD_SCENARIO3_EXPERIMENT_H
+#ifndef ORBITSHIELD_TARGETED_FLOW_GRAYHOLE_RUNNER_H
+#define ORBITSHIELD_TARGETED_FLOW_GRAYHOLE_RUNNER_H
 
 #include <cstdint>
 #include <string>
@@ -14,7 +14,7 @@ namespace ns3
 
 struct OrbitShieldTargetedFlowGrayholeConfig;
 
-struct OrbitShieldScenario3ExperimentSummary
+struct OrbitShieldTargetedFlowGrayholeExperimentSummary
 {
     double baselinePdr{0.0};
     double attackPdr{0.0};
@@ -26,10 +26,10 @@ struct OrbitShieldScenario3ExperimentSummary
     std::string outputDir;
 };
 
-bool RunOrbitShieldScenario3Experiment(const OrbitShieldTargetedFlowGrayholeConfig& config,
-                                       OrbitShieldScenario3ExperimentSummary& summary,
+bool RunOrbitShieldTargetedFlowGrayholeExperiment(const OrbitShieldTargetedFlowGrayholeConfig& config,
+                                       OrbitShieldTargetedFlowGrayholeExperimentSummary& summary,
                                        std::string* errorMessage = nullptr);
 
 } // namespace ns3
 
-#endif /* ORBITSHIELD_SCENARIO3_EXPERIMENT_H */
+#endif /* ORBITSHIELD_TARGETED_FLOW_GRAYHOLE_RUNNER_H */

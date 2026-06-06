@@ -2,10 +2,10 @@
  * Copyright (c) 2026 Marco A. F. Barbosa
  */
 
-#ifndef ORBITSHIELD_SCENARIO3_DETECTOR_H
-#define ORBITSHIELD_SCENARIO3_DETECTOR_H
+#ifndef ORBITSHIELD_TARGETED_FLOW_GRAYHOLE_DETECTOR_H
+#define ORBITSHIELD_TARGETED_FLOW_GRAYHOLE_DETECTOR_H
 
-#include "orbitshield-scenario3-telemetry.h"
+#include "targeted-flow-grayhole-telemetry.h"
 
 #include <cstdint>
 #include <string>
@@ -15,7 +15,7 @@
 namespace ns3
 {
 
-class OrbitShieldScenario3Detector
+class OrbitShieldTargetedFlowGrayholeDetector
 {
   public:
     void SetMinSamples(uint32_t minSamples);
@@ -23,7 +23,7 @@ class OrbitShieldScenario3Detector
     void SetScoreThreshold(double threshold);
     void SetMaxFlaggedSatellites(uint32_t maxFlaggedSatellites);
 
-    void ObserveWindow(const OrbitShieldScenario3FlowSample& sample,
+    void ObserveWindow(const OrbitShieldTargetedFlowGrayholeFlowSample& sample,
                        const std::vector<std::string>& routeSatellites,
                        bool targetFlow);
     void Clear();
@@ -42,4 +42,4 @@ class OrbitShieldScenario3Detector
 
 } // namespace ns3
 
-#endif /* ORBITSHIELD_SCENARIO3_DETECTOR_H */
+#endif /* ORBITSHIELD_TARGETED_FLOW_GRAYHOLE_DETECTOR_H */

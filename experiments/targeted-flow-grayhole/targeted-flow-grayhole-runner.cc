@@ -2,15 +2,16 @@
  * Copyright (c) 2026 Marco A. F. Barbosa
  */
 
-#include "orbitshield-scenario3-experiment.h"
+#include "targeted-flow-grayhole-runner.h"
 
-#include "ground-station.h"
-#include "orbitshield-routing-helper.h"
-#include "../experiments/targeted-flow-grayhole/targeted-flow-grayhole-config.h"
-#include "orbitshield-scenario3-detector.h"
-#include "orbitshield-scenario3-telemetry.h"
-#include "satellite-link.h"
-#include "satellite.h"
+#include "targeted-flow-grayhole-config.h"
+#include "targeted-flow-grayhole-detector.h"
+#include "targeted-flow-grayhole-telemetry.h"
+
+#include "ns3/ground-station.h"
+#include "ns3/orbitshield-routing-helper.h"
+#include "ns3/satellite-link.h"
+#include "ns3/satellite.h"
 
 #include "ns3/rng-seed-manager.h"
 #include "ns3/simulator.h"
@@ -115,11 +116,11 @@ RepliesFromPdr(uint32_t sent, double pdr)
 } // namespace
 
 bool
-RunOrbitShieldScenario3Experiment(const OrbitShieldTargetedFlowGrayholeConfig& config,
-                                  OrbitShieldScenario3ExperimentSummary& summary,
+RunOrbitShieldTargetedFlowGrayholeExperiment(const OrbitShieldTargetedFlowGrayholeConfig& config,
+                                  OrbitShieldTargetedFlowGrayholeExperimentSummary& summary,
                                   std::string* errorMessage)
 {
-    summary = OrbitShieldScenario3ExperimentSummary();
+    summary = OrbitShieldTargetedFlowGrayholeExperimentSummary();
     summary.outputDir = config.telemetry.outputDir;
 
     RngSeedManager::SetSeed(config.simulation.seed);
@@ -140,11 +141,11 @@ RunOrbitShieldScenario3Experiment(const OrbitShieldTargetedFlowGrayholeConfig& c
     OrbitShieldRoutingHelper routingHelper;
     routingHelper.Install(constellation);
 
-    OrbitShieldScenario3Telemetry telemetry;
+    OrbitShieldTargetedFlowGrayholeTelemetry telemetry;
     telemetry.SetOutputDir(config.telemetry.outputDir);
     telemetry.SetWriteCsv(config.telemetry.writeCsv);
 
-    OrbitShieldScenario3Detector detector;
+    OrbitShieldTargetedFlowGrayholeDetector detector;
     detector.SetMinSamples(config.detection.minSamples);
     detector.SetTargetPdrThreshold(config.detection.targetPdrThreshold);
     detector.SetScoreThreshold(config.detection.scoreThreshold);
@@ -172,14 +173,14 @@ RunOrbitShieldScenario3Experiment(const OrbitShieldTargetedFlowGrayholeConfig& c
             FindGroundStationByName(constellation->GetGroundStations(), targetPair.destination);
         if (!sourceStation || !destinationStation)
         {
-            SetError(errorMessage, "Scenario 3 target pair references missing ground station");
+            SetError(errorMessage, "targeted-flow grayhole target pair references missing ground station");
             return false;
         }
 
         const Ipv4Address destinationAddress = GetFirstNonLoopbackAddress(destinationStation);
         if (destinationAddress == Ipv4Address::GetZero())
         {
-            SetError(errorMessage, "Scenario 3 target destination has no IPv4 address");
+            SetError(errorMessage, "targeted-flow grayhole target destination has no IPv4 address");
             return false;
         }
 
@@ -189,7 +190,7 @@ RunOrbitShieldScenario3Experiment(const OrbitShieldTargetedFlowGrayholeConfig& c
                                                                             destinationAddress);
         if (routePath.empty() || routeSatellites.empty())
         {
-            SetError(errorMessage, "Scenario 3 target route is unavailable");
+            SetError(errorMessage, "targeted-flow grayhole target route is unavailable");
             return false;
         }
 

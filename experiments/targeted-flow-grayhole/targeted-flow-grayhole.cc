@@ -4,8 +4,9 @@
 
 #include "ns3/core-module.h"
 #include "ns3/orbitshield-module.h"
-#include "ns3/targeted-flow-grayhole-config.h"
-#include "ns3/orbitshield-scenario3-experiment.h"
+
+#include "targeted-flow-grayhole-config.h"
+#include "targeted-flow-grayhole-runner.h"
 
 #include <algorithm>
 #include <iostream>
@@ -112,8 +113,8 @@ main(int argc, char* argv[])
         config.telemetry.outputDir = outputDir;
     }
 
-    OrbitShieldScenario3ExperimentSummary summary;
-    if (!RunOrbitShieldScenario3Experiment(config, summary, &error))
+    OrbitShieldTargetedFlowGrayholeExperimentSummary summary;
+    if (!RunOrbitShieldTargetedFlowGrayholeExperiment(config, summary, &error))
     {
         std::cerr << "Targeted-flow grayhole run failed: " << error << std::endl;
         return 1;

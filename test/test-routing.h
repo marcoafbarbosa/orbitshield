@@ -226,13 +226,13 @@ class OrbitShieldGrayholePolicyTest : public ns3::TestCase
 };
 
 /**
- * \brief Test case for Scenario 3 telemetry records and CSV artifacts
+ * \brief Test case for targeted-flow grayhole telemetry records and CSV artifacts
  */
-class OrbitShieldScenario3TelemetryTest : public ns3::TestCase
+class OrbitShieldTargetedFlowGrayholeTelemetryTest : public ns3::TestCase
 {
   public:
-    OrbitShieldScenario3TelemetryTest();
-    ~OrbitShieldScenario3TelemetryTest() override;
+    OrbitShieldTargetedFlowGrayholeTelemetryTest();
+    ~OrbitShieldTargetedFlowGrayholeTelemetryTest() override;
 
   private:
     void DoRun() override;
@@ -252,26 +252,26 @@ class OrbitShieldRouteExclusionTest : public ns3::TestCase
 };
 
 /**
- * \brief Test case for deterministic Scenario 3 detector scoring
+ * \brief Test case for deterministic targeted-flow grayhole detector scoring
  */
-class OrbitShieldScenario3DetectorTest : public ns3::TestCase
+class OrbitShieldTargetedFlowGrayholeDetectorTest : public ns3::TestCase
 {
   public:
-    OrbitShieldScenario3DetectorTest();
-    ~OrbitShieldScenario3DetectorTest() override;
+    OrbitShieldTargetedFlowGrayholeDetectorTest();
+    ~OrbitShieldTargetedFlowGrayholeDetectorTest() override;
 
   private:
     void DoRun() override;
 };
 
 /**
- * \brief Test case for shortened deterministic Scenario 3 experiment runs
+ * \brief Test case for shortened deterministic targeted-flow grayhole experiment runs
  */
-class OrbitShieldScenario3ExperimentTest : public ns3::TestCase
+class OrbitShieldTargetedFlowGrayholeExperimentTest : public ns3::TestCase
 {
   public:
-    OrbitShieldScenario3ExperimentTest();
-    ~OrbitShieldScenario3ExperimentTest() override;
+    OrbitShieldTargetedFlowGrayholeExperimentTest();
+    ~OrbitShieldTargetedFlowGrayholeExperimentTest() override;
 
   private:
     void DoRun() override;

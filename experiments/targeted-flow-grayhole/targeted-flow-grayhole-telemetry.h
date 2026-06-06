@@ -2,8 +2,8 @@
  * Copyright (c) 2026 Marco A. F. Barbosa
  */
 
-#ifndef ORBITSHIELD_SCENARIO3_TELEMETRY_H
-#define ORBITSHIELD_SCENARIO3_TELEMETRY_H
+#ifndef ORBITSHIELD_TARGETED_FLOW_GRAYHOLE_TELEMETRY_H
+#define ORBITSHIELD_TARGETED_FLOW_GRAYHOLE_TELEMETRY_H
 
 #include "ns3/ipv4-address.h"
 #include "ns3/nstime.h"
@@ -15,7 +15,7 @@
 namespace ns3
 {
 
-struct OrbitShieldScenario3FlowSample
+struct OrbitShieldTargetedFlowGrayholeFlowSample
 {
     Time time;
     std::string flowId;
@@ -28,14 +28,14 @@ struct OrbitShieldScenario3FlowSample
     bool attackActive{false};
 };
 
-struct OrbitShieldScenario3RouteSnapshot
+struct OrbitShieldTargetedFlowGrayholeRouteSnapshot
 {
     Time time;
     std::string flowId;
     std::vector<std::string> path;
 };
 
-struct OrbitShieldScenario3ForwardingEvent
+struct OrbitShieldTargetedFlowGrayholeForwardingEvent
 {
     Time time;
     uint32_t nodeId{0};
@@ -47,7 +47,7 @@ struct OrbitShieldScenario3ForwardingEvent
     bool dropped{false};
 };
 
-struct OrbitShieldScenario3NodeLabel
+struct OrbitShieldTargetedFlowGrayholeNodeLabel
 {
     Time time;
     std::string nodeName;
@@ -55,7 +55,7 @@ struct OrbitShieldScenario3NodeLabel
     bool flagged{false};
 };
 
-struct OrbitShieldScenario3MitigationEvent
+struct OrbitShieldTargetedFlowGrayholeMitigationEvent
 {
     Time time;
     std::string nodeName;
@@ -63,7 +63,7 @@ struct OrbitShieldScenario3MitigationEvent
     std::string reason;
 };
 
-class OrbitShieldScenario3Telemetry
+class OrbitShieldTargetedFlowGrayholeTelemetry
 {
   public:
     void SetOutputDir(const std::string& outputDir);
@@ -100,11 +100,11 @@ class OrbitShieldScenario3Telemetry
                                const std::string& action,
                                const std::string& reason);
 
-    const std::vector<OrbitShieldScenario3FlowSample>& GetFlowSamples() const;
-    const std::vector<OrbitShieldScenario3RouteSnapshot>& GetRouteSnapshots() const;
-    const std::vector<OrbitShieldScenario3ForwardingEvent>& GetForwardingEvents() const;
-    const std::vector<OrbitShieldScenario3NodeLabel>& GetNodeLabels() const;
-    const std::vector<OrbitShieldScenario3MitigationEvent>& GetMitigationEvents() const;
+    const std::vector<OrbitShieldTargetedFlowGrayholeFlowSample>& GetFlowSamples() const;
+    const std::vector<OrbitShieldTargetedFlowGrayholeRouteSnapshot>& GetRouteSnapshots() const;
+    const std::vector<OrbitShieldTargetedFlowGrayholeForwardingEvent>& GetForwardingEvents() const;
+    const std::vector<OrbitShieldTargetedFlowGrayholeNodeLabel>& GetNodeLabels() const;
+    const std::vector<OrbitShieldTargetedFlowGrayholeMitigationEvent>& GetMitigationEvents() const;
 
     bool WriteCsv(std::string* errorMessage = nullptr) const;
     static bool IsAttackActive(Time time, Time attackStart, Time attackStop);
@@ -112,13 +112,13 @@ class OrbitShieldScenario3Telemetry
   private:
     std::string m_outputDir;
     bool m_writeCsv{true};
-    std::vector<OrbitShieldScenario3FlowSample> m_flowSamples;
-    std::vector<OrbitShieldScenario3RouteSnapshot> m_routeSnapshots;
-    std::vector<OrbitShieldScenario3ForwardingEvent> m_forwardingEvents;
-    std::vector<OrbitShieldScenario3NodeLabel> m_nodeLabels;
-    std::vector<OrbitShieldScenario3MitigationEvent> m_mitigationEvents;
+    std::vector<OrbitShieldTargetedFlowGrayholeFlowSample> m_flowSamples;
+    std::vector<OrbitShieldTargetedFlowGrayholeRouteSnapshot> m_routeSnapshots;
+    std::vector<OrbitShieldTargetedFlowGrayholeForwardingEvent> m_forwardingEvents;
+    std::vector<OrbitShieldTargetedFlowGrayholeNodeLabel> m_nodeLabels;
+    std::vector<OrbitShieldTargetedFlowGrayholeMitigationEvent> m_mitigationEvents;
 };
 
 } // namespace ns3
 
-#endif /* ORBITSHIELD_SCENARIO3_TELEMETRY_H */
+#endif /* ORBITSHIELD_TARGETED_FLOW_GRAYHOLE_TELEMETRY_H */

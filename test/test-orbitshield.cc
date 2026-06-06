@@ -39,10 +39,10 @@ OrbitShieldTestSuite::OrbitShieldTestSuite()
     AddTestCase(new OrbitShieldTargetedFlowGrayholeConfigTest(), TestCase::Duration::QUICK);
     AddTestCase(new OrbitShieldRouteMembershipTest(), TestCase::Duration::QUICK);
     AddTestCase(new OrbitShieldGrayholePolicyTest(), TestCase::Duration::QUICK);
-    AddTestCase(new OrbitShieldScenario3TelemetryTest(), TestCase::Duration::QUICK);
+    AddTestCase(new OrbitShieldTargetedFlowGrayholeTelemetryTest(), TestCase::Duration::QUICK);
     AddTestCase(new OrbitShieldRouteExclusionTest(), TestCase::Duration::QUICK);
-    AddTestCase(new OrbitShieldScenario3DetectorTest(), TestCase::Duration::QUICK);
-    AddTestCase(new OrbitShieldScenario3ExperimentTest(), TestCase::Duration::QUICK);
+    AddTestCase(new OrbitShieldTargetedFlowGrayholeDetectorTest(), TestCase::Duration::QUICK);
+    AddTestCase(new OrbitShieldTargetedFlowGrayholeExperimentTest(), TestCase::Duration::QUICK);
 }
 
 static OrbitShieldTestSuite g_orbitShieldTestSuite;

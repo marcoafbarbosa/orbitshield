@@ -4,10 +4,10 @@
 
 #include "test-routing.h"
 #include "ns3/orbitshield-module.h"
-#include "ns3/targeted-flow-grayhole-config.h"
-#include "ns3/orbitshield-scenario3-detector.h"
-#include "ns3/orbitshield-scenario3-experiment.h"
-#include "ns3/orbitshield-scenario3-telemetry.h"
+#include "../experiments/targeted-flow-grayhole/targeted-flow-grayhole-config.h"
+#include "../experiments/targeted-flow-grayhole/targeted-flow-grayhole-detector.h"
+#include "../experiments/targeted-flow-grayhole/targeted-flow-grayhole-runner.h"
+#include "../experiments/targeted-flow-grayhole/targeted-flow-grayhole-telemetry.h"
 #include "ns3/constant-position-mobility-model.h"
 #include "ns3/test.h"
 #include "ns3/ipv4.h"
@@ -359,10 +359,10 @@ PathContainsSatellite(const std::vector<Ptr<Node>>& path, const std::string& sat
     return std::find(satelliteNames.begin(), satelliteNames.end(), satelliteName) != satelliteNames.end();
 }
 
-OrbitShieldScenario3FlowSample
+OrbitShieldTargetedFlowGrayholeFlowSample
 MakeDetectorSample(uint32_t sent, uint32_t replies, bool attackActive)
 {
-    OrbitShieldScenario3FlowSample sample;
+    OrbitShieldTargetedFlowGrayholeFlowSample sample;
     sample.time = attackActive ? Seconds(150.0) : Seconds(50.0);
     sample.flowId = attackActive ? "target" : "background";
     sample.source = "Tempe";
@@ -817,19 +817,19 @@ OrbitShieldIpv4AddressAssignmentTest::DoRun()
     Simulator::Destroy();
 }
 
-OrbitShieldScenario3TelemetryTest::OrbitShieldScenario3TelemetryTest()
-    : TestCase("OrbitShieldScenario3TelemetryTest")
+OrbitShieldTargetedFlowGrayholeTelemetryTest::OrbitShieldTargetedFlowGrayholeTelemetryTest()
+    : TestCase("OrbitShieldTargetedFlowGrayholeTelemetryTest")
 {
 }
 
-OrbitShieldScenario3TelemetryTest::~OrbitShieldScenario3TelemetryTest()
+OrbitShieldTargetedFlowGrayholeTelemetryTest::~OrbitShieldTargetedFlowGrayholeTelemetryTest()
 {
 }
 
 void
-OrbitShieldScenario3TelemetryTest::DoRun()
+OrbitShieldTargetedFlowGrayholeTelemetryTest::DoRun()
 {
-    OrbitShieldScenario3Telemetry telemetry;
+    OrbitShieldTargetedFlowGrayholeTelemetry telemetry;
     const Time attackStart = Seconds(100.0);
     const Time attackStop = Seconds(200.0);
 
@@ -1047,19 +1047,19 @@ OrbitShieldRouteExclusionTest::DoRun()
     Simulator::Destroy();
 }
 
-OrbitShieldScenario3DetectorTest::OrbitShieldScenario3DetectorTest()
-    : TestCase("OrbitShieldScenario3DetectorTest")
+OrbitShieldTargetedFlowGrayholeDetectorTest::OrbitShieldTargetedFlowGrayholeDetectorTest()
+    : TestCase("OrbitShieldTargetedFlowGrayholeDetectorTest")
 {
 }
 
-OrbitShieldScenario3DetectorTest::~OrbitShieldScenario3DetectorTest()
+OrbitShieldTargetedFlowGrayholeDetectorTest::~OrbitShieldTargetedFlowGrayholeDetectorTest()
 {
 }
 
 void
-OrbitShieldScenario3DetectorTest::DoRun()
+OrbitShieldTargetedFlowGrayholeDetectorTest::DoRun()
 {
-    OrbitShieldScenario3Detector detector;
+    OrbitShieldTargetedFlowGrayholeDetector detector;
     detector.SetMinSamples(3);
     detector.SetTargetPdrThreshold(0.6);
     detector.SetScoreThreshold(1.0);
@@ -1102,17 +1102,17 @@ OrbitShieldScenario3DetectorTest::DoRun()
                           "Detector should allow zero configured exclusions");
 }
 
-OrbitShieldScenario3ExperimentTest::OrbitShieldScenario3ExperimentTest()
-    : TestCase("OrbitShieldScenario3ExperimentTest")
+OrbitShieldTargetedFlowGrayholeExperimentTest::OrbitShieldTargetedFlowGrayholeExperimentTest()
+    : TestCase("OrbitShieldTargetedFlowGrayholeExperimentTest")
 {
 }
 
-OrbitShieldScenario3ExperimentTest::~OrbitShieldScenario3ExperimentTest()
+OrbitShieldTargetedFlowGrayholeExperimentTest::~OrbitShieldTargetedFlowGrayholeExperimentTest()
 {
 }
 
 void
-OrbitShieldScenario3ExperimentTest::DoRun()
+OrbitShieldTargetedFlowGrayholeExperimentTest::DoRun()
 {
     OrbitShieldTargetedFlowGrayholeConfig config;
     std::string error;
@@ -1138,10 +1138,10 @@ OrbitShieldScenario3ExperimentTest::DoRun()
         config.attack.compromisedSatellites.push_back(satellite->GetName());
     }
 
-    OrbitShieldScenario3ExperimentSummary summary;
-    NS_TEST_ASSERT_MSG_EQ(RunOrbitShieldScenario3Experiment(config, summary, &error),
+    OrbitShieldTargetedFlowGrayholeExperimentSummary summary;
+    NS_TEST_ASSERT_MSG_EQ(RunOrbitShieldTargetedFlowGrayholeExperiment(config, summary, &error),
                           true,
-                          "Short Scenario 3 experiment should run: " << error);
+                          "Short targeted-flow grayhole experiment should run: " << error);
     NS_TEST_EXPECT_MSG_GT(summary.baselinePdr,
                           summary.attackPdr,
                           "Target PDR should be lower during the attack than baseline");
@@ -1163,12 +1163,12 @@ OrbitShieldScenario3ExperimentTest::DoRun()
     OrbitShieldTargetedFlowGrayholeConfig noMitigation = config;
     noMitigation.mitigation.enabled = false;
     noMitigation.telemetry.outputDir = CreateTempDirFilename("orbitshield-targeted-flow-grayhole-experiment-no-mitigation");
-    OrbitShieldScenario3ExperimentSummary noMitigationSummary;
-    NS_TEST_ASSERT_MSG_EQ(RunOrbitShieldScenario3Experiment(noMitigation,
+    OrbitShieldTargetedFlowGrayholeExperimentSummary noMitigationSummary;
+    NS_TEST_ASSERT_MSG_EQ(RunOrbitShieldTargetedFlowGrayholeExperiment(noMitigation,
                                                             noMitigationSummary,
                                                             &error),
                           true,
-                          "No-mitigation Scenario 3 experiment should run: " << error);
+                          "No-mitigation targeted-flow grayhole experiment should run: " << error);
     NS_TEST_EXPECT_MSG_GT(noMitigationSummary.dropEvents,
                           0u,
                           "No-mitigation variant should still record grayhole drops");
