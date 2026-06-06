@@ -94,3 +94,5 @@ build_exec(
   INSTALL_DIRECTORY_PATH ${CMAKE_INSTALL_LIBEXECDIR}/orbitshield
 )
 
+add_subdirectory(experiments)
+

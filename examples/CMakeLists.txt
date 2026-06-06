@@ -16,8 +16,3 @@ build_lib_example(
   LIBRARIES_TO_LINK ${liborbitshield}
 )
 
-build_lib_example(
-  NAME orbitshield-scenario3-grayhole
-  SOURCE_FILES orbitshield-scenario3-grayhole.cc
-  LIBRARIES_TO_LINK ${liborbitshield}
-)
