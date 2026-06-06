@@ -5,8 +5,6 @@
 #ifndef ORBITSHIELD_GRAYHOLE_POLICY_H
 #define ORBITSHIELD_GRAYHOLE_POLICY_H
 
-#include "orbitshield-scenario3-config.h"
-
 #include "ns3/callback.h"
 #include "ns3/ipv4-address.h"
 #include "ns3/node.h"
@@ -22,6 +20,13 @@
 
 namespace ns3
 {
+
+enum class OrbitShieldGrayholeDirection
+{
+    FORWARD,
+    REVERSE,
+    BIDIRECTIONAL
+};
 
 class OrbitShieldGrayholePolicy : public Object
 {
@@ -44,7 +49,7 @@ class OrbitShieldGrayholePolicy : public Object
     void SetCompromisedSatellites(const std::vector<std::string>& satelliteNames);
     void SetAttackWindow(Time start, Time stop);
     void SetDropProbability(double probability);
-    void SetDirection(OrbitShieldScenario3Direction direction);
+    void SetDirection(OrbitShieldGrayholeDirection direction);
     int64_t AssignStreams(int64_t stream);
 
     void AddTargetPair(Ipv4Address source,
@@ -83,7 +88,7 @@ class OrbitShieldGrayholePolicy : public Object
 
     std::unordered_set<std::string> m_compromisedSatellites;
     std::vector<TargetPair> m_targetPairs;
-    OrbitShieldScenario3Direction m_direction{OrbitShieldScenario3Direction::BIDIRECTIONAL};
+    OrbitShieldGrayholeDirection m_direction{OrbitShieldGrayholeDirection::BIDIRECTIONAL};
     Time m_attackStart{Seconds(0)};
     Time m_attackStop{Seconds(0)};
     double m_dropProbability{0.0};

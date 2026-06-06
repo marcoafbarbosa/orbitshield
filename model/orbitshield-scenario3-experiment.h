@@ -5,14 +5,14 @@
 #ifndef ORBITSHIELD_SCENARIO3_EXPERIMENT_H
 #define ORBITSHIELD_SCENARIO3_EXPERIMENT_H
 
-#include "orbitshield-scenario3-config.h"
-
 #include <cstdint>
 #include <string>
 #include <vector>
 
 namespace ns3
 {
+
+struct OrbitShieldScenario3Config;
 
 struct OrbitShieldScenario3ExperimentSummary
 {

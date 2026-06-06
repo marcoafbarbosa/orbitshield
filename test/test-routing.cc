@@ -4,6 +4,10 @@
 
 #include "test-routing.h"
 #include "ns3/orbitshield-module.h"
+#include "ns3/orbitshield-scenario3-config.h"
+#include "ns3/orbitshield-scenario3-detector.h"
+#include "ns3/orbitshield-scenario3-experiment.h"
+#include "ns3/orbitshield-scenario3-telemetry.h"
 #include "ns3/constant-position-mobility-model.h"
 #include "ns3/test.h"
 #include "ns3/ipv4.h"
@@ -1216,7 +1220,7 @@ OrbitShieldGrayholePolicyTest::DoRun()
     policy->SetCompromisedSatellites({"IRIDIUM 113"});
     policy->SetAttackWindow(Seconds(0.0), Seconds(10.0));
     policy->SetDropProbability(1.0);
-    policy->SetDirection(OrbitShieldScenario3Direction::BIDIRECTIONAL);
+    policy->SetDirection(OrbitShieldGrayholeDirection::BIDIRECTIONAL);
     policy->AddTargetPair(Ipv4Address("10.1.0.1"),
                           Ipv4Address("10.2.0.1"),
                           {"IRIDIUM 113"},

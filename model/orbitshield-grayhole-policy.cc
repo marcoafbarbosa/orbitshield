@@ -79,7 +79,7 @@ OrbitShieldGrayholePolicy::SetDropProbability(double probability)
 }
 
 void
-OrbitShieldGrayholePolicy::SetDirection(OrbitShieldScenario3Direction direction)
+OrbitShieldGrayholePolicy::SetDirection(OrbitShieldGrayholeDirection direction)
 {
     m_direction = direction;
 }
@@ -235,11 +235,11 @@ OrbitShieldGrayholePolicy::IsDirectionMatch(const TargetPair& targetPair,
 
     switch (m_direction)
     {
-    case OrbitShieldScenario3Direction::FORWARD:
+    case OrbitShieldGrayholeDirection::FORWARD:
         return forward;
-    case OrbitShieldScenario3Direction::REVERSE:
+    case OrbitShieldGrayholeDirection::REVERSE:
         return reverse;
-    case OrbitShieldScenario3Direction::BIDIRECTIONAL:
+    case OrbitShieldGrayholeDirection::BIDIRECTIONAL:
         return forward || reverse;
     }
     return forward || reverse;

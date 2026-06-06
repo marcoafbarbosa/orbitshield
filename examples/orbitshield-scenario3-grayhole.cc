@@ -4,6 +4,8 @@
 
 #include "ns3/core-module.h"
 #include "ns3/orbitshield-module.h"
+#include "ns3/orbitshield-scenario3-config.h"
+#include "ns3/orbitshield-scenario3-experiment.h"
 
 #include <algorithm>
 #include <iostream>

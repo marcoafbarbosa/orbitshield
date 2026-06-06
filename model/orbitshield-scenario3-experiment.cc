@@ -6,6 +6,7 @@
 
 #include "ground-station.h"
 #include "orbitshield-routing-helper.h"
+#include "orbitshield-scenario3-config.h"
 #include "orbitshield-scenario3-detector.h"
 #include "orbitshield-scenario3-telemetry.h"
 #include "satellite-link.h"
