@@ -28,6 +28,7 @@ The module provides:
   - [Models and Core Components](#models-and-core-components)
   - [Tests](#tests)
   - [Examples](#examples)
+  - [Experiments](#experiments)
   - [Tools](#tools)
 - [Module Structure](#module-structure)
 - [Dependencies](#dependencies)
@@ -48,7 +49,7 @@ The module provides:
   - [Dynamic Refresh Integration](#dynamic-refresh-integration)
   - [SatelliteNetDevice Trait Summary](#satellitenetdevice-trait-summary)
   - [Known Constraints](#known-constraints)
-- [Scenario 3 Grayhole Experiments](#scenario-3-grayhole-experiments)
+- [Targeted Flow Grayhole Experiment](#targeted-flow-grayhole-experiment)
   - [Profile Format](#profile-format)
   - [Telemetry Artifacts](#telemetry-artifacts)
   - [Detector and Mitigation](#detector-and-mitigation)
@@ -149,14 +150,6 @@ flowchart LR
   - Route-conditioned target-flow policy for compromised satellites
   - Matches IPv4 ground-pair traffic by configured direction and attack window
   - Emits forwarding decisions for accepted and dropped target packets
-- `OrbitShieldScenario3Telemetry`:
-  - In-memory flow, route, forwarding, node-label, and mitigation records
-  - Optional CSV writer for Scenario 3 experiment artifacts
-- `OrbitShieldScenario3Detector`:
-  - Deterministic detector that scores target-route satellites from low-PDR target windows
-  - Provides a configurable policy hook for mitigation; it is not a trained AI model
-- `OrbitShieldScenario3Experiment`:
-  - Shared deterministic Scenario 3 runner logic used by tests and the example executable
 - `OrbitShieldUtils`:
   - Utility functions used across the module
 
@@ -183,13 +176,13 @@ All tests are in the `orbitshield` suite and can be run with:
 | `OrbitShieldDynamicRouteRefreshTest` | 10 route recomputations over 600 s; at least one reply in first 120 s |
 | `OrbitShieldMultiGroundStationRoutingTest` | All 10 GS pairs over 300 s / 30 s refresh; ≥ 7 pairs ≥ 80% delivery; RTT ≤ 500 ms; hop count ≤ 8 |
 | `OrbitShieldStaticRoutingStrategyTest` | Static recomputation under 20 fast refreshes (15 s) over 300 s; no crash |
-| `OrbitShieldScenario3ConfigTest` | Scenario 3 profile parsing, defaults, variants, invalid values, path resolution |
+| `OrbitShieldTargetedFlowGrayholeConfigTest` | Targeted-flow grayhole profile parsing, defaults, variants, invalid values, path resolution |
 | `OrbitShieldRouteMembershipTest` | Current route path and satellite transit membership for a target ground-station pair |
 | `OrbitShieldGrayholePolicyTest` | Route-active compromised satellite drops only target packets inside the attack window |
-| `OrbitShieldScenario3TelemetryTest` | In-memory Scenario 3 records and CSV artifact headers/data rows |
+| `OrbitShieldTargetedFlowGrayholeTelemetryTest` | In-memory targeted-flow grayhole records and CSV artifact headers/data rows |
 | `OrbitShieldRouteExclusionTest` | Excluded satellites are omitted from recomputed routes and stale routes are removed |
-| `OrbitShieldScenario3DetectorTest` | Low-PDR target windows flag only satellites on target routes |
-| `OrbitShieldScenario3ExperimentTest` | Short deterministic Scenario 3 runs with mitigation and no-mitigation variants |
+| `OrbitShieldTargetedFlowGrayholeDetectorTest` | Low-PDR target windows flag only satellites on target routes |
+| `OrbitShieldTargetedFlowGrayholeExperimentTest` | Short deterministic targeted-flow grayhole runs with mitigation and no-mitigation variants |
 
 ### Examples
 
@@ -197,7 +190,10 @@ All tests are in the `orbitshield` suite and can be run with:
 - `orbitshield-load-from-tle`
 - `orbitshield-load-from-yaml`
 - `orbitshield-dynamic-topology`
-- `orbitshield-scenario3-grayhole`
+
+### Experiments
+
+- `orbitshield-targeted-flow-grayhole` (`experiments/targeted-flow-grayhole/`): targeted ground-pair grayhole workflow built on generic OrbitShield models, route introspection, and route exclusion.
 
 ### Tools
 
@@ -221,12 +217,20 @@ contrib/orbitshield/
 |  |- isl-propagation-delay-model.h / isl-propagation-delay-model.cc
 |  |- orbitshield-routing-helper.h / orbitshield-routing-helper.cc
 |  |- orbitshield-grayhole-policy.h / orbitshield-grayhole-policy.cc
-|  |- orbitshield-scenario3-config.h / orbitshield-scenario3-config.cc
-|  |- orbitshield-scenario3-detector.h / orbitshield-scenario3-detector.cc
-|  |- orbitshield-scenario3-experiment.h / orbitshield-scenario3-experiment.cc
-|  |- orbitshield-scenario3-telemetry.h / orbitshield-scenario3-telemetry.cc
 |  |- orbitshield-utils.h / orbitshield-utils.cc
 |  |- orbitshield-module.h
+|- experiments/
+|  |- CMakeLists.txt
+|  |- targeted-flow-grayhole/
+|     |- CMakeLists.txt
+|     |- README.md
+|     |- targeted-flow-grayhole.cc
+|     |- targeted-flow-grayhole-config.h / targeted-flow-grayhole-config.cc
+|     |- targeted-flow-grayhole-detector.h / targeted-flow-grayhole-detector.cc
+|     |- targeted-flow-grayhole-runner.h / targeted-flow-grayhole-runner.cc
+|     |- targeted-flow-grayhole-telemetry.h / targeted-flow-grayhole-telemetry.cc
+|     |- profiles/
+|        |- targeted-flow-grayhole.yaml
 |- test/
 |  |- test-satellite.h / test-satellite.cc
 |  |- test-constellation.h / test-constellation.cc
@@ -238,7 +242,6 @@ contrib/orbitshield/
 |  |- orbitshield-load-from-tle.cc
 |  |- orbitshield-load-from-yaml.cc
 |  |- orbitshield-dynamic-topology.cc
-|  |- orbitshield-scenario3-grayhole.cc
 |- tools/
 |  |- .ne_110m_land.geojson
 |  |- analyze_constellation_rings.py
@@ -249,8 +252,6 @@ contrib/orbitshield/
 |- data/
 |  |- iridium-20260312.txt
 |  |- iridium-20260312.yaml
-|  |- scenarios/
-|     |- scenario3-grayhole.yaml
 |- CMakeLists.txt
 `- README.md
 ```
@@ -467,17 +468,17 @@ Multi-link `Send()` selects the outgoing link by resolving the packet's IPv4 des
 - IPv6 is not supported. All routing uses `Ipv4StaticRouting`.
 - `AddLinkChangeCallback` stores the callback but link-state change events are not fired (the device is always considered up after construction).
 
-## Scenario 3 Grayhole Experiments
+## Targeted Flow Grayhole Experiment
 
-`orbitshield-scenario3-grayhole` runs the Scenario 3 route-conditioned grayhole experiment from a YAML profile. The default profile is [data/scenarios/scenario3-grayhole.yaml](data/scenarios/scenario3-grayhole.yaml) and uses the Iridium dataset with Tempe, Fairbanks, Svalbard, Izhevsk, and Punta Arenas ground stations.
+`orbitshield-targeted-flow-grayhole` runs a route-conditioned grayhole experiment from a YAML profile. The default profile is [experiments/targeted-flow-grayhole/profiles/targeted-flow-grayhole.yaml](experiments/targeted-flow-grayhole/profiles/targeted-flow-grayhole.yaml) and uses the Iridium dataset with Tempe, Fairbanks, Svalbard, Izhevsk, and Punta Arenas ground stations.
 
 The runner loads the constellation, builds ISLs and GSLs, installs shortest-hop IPv4 routes, resolves target route membership, applies the grayhole policy inputs, evaluates deterministic detector windows, optionally excludes flagged satellites, and writes telemetry artifacts. For a fixed profile, seed, and run, the output is deterministic.
 
 ```bash
-./ns3 run orbitshield-scenario3-grayhole -- \
-  --config=contrib/orbitshield/data/scenarios/scenario3-grayhole.yaml \
+./ns3 run orbitshield-targeted-flow-grayhole -- \
+  --config=contrib/orbitshield/experiments/targeted-flow-grayhole/profiles/targeted-flow-grayhole.yaml \
   --durationSeconds=300 \
-  --outputDir=contrib/orbitshield/results/scenario3-smoke
+  --outputDir=contrib/orbitshield/results/targeted-flow-grayhole-smoke
 ```
 
 Supported scalar overrides are `--durationSeconds`, `--refreshIntervalSeconds`, `--attackDropProbability`, `--mitigationEnabled=true|false`, and `--outputDir`.
@@ -511,11 +512,11 @@ When `telemetry.writeCsv` is true, the runner writes:
 | `node_labels.csv` | Compromised and flagged node labels |
 | `mitigation_events.csv` | Detector flag/exclusion and route recomputation actions |
 
-The same record types are available in memory through `OrbitShieldScenario3Telemetry` for tests and future integrations.
+The same record types are available in memory through `OrbitShieldTargetedFlowGrayholeTelemetry` for tests and future integrations.
 
 ### Detector and Mitigation
 
-`OrbitShieldScenario3Detector` is deterministic and configurable. It scores satellites that appear on target routes when a target-flow window has enough samples and PDR below `detection.targetPdrThreshold`. A satellite is flagged when its score reaches `detection.scoreThreshold`, subject to `mitigation.maxExcludedSatellites`.
+`OrbitShieldTargetedFlowGrayholeDetector` is deterministic and configurable. It scores satellites that appear on target routes when a target-flow window has enough samples and PDR below `detection.targetPdrThreshold`. A satellite is flagged when its score reaches `detection.scoreThreshold`, subject to `mitigation.maxExcludedSatellites`.
 
 When mitigation is enabled, flagged satellites are added to `OrbitShieldRoutingHelper`'s exclusion set and routes are recomputed. The implementation represents the AI action-policy hook with deterministic scoring; it does not include a trained model or external inference runtime.
 
@@ -583,10 +584,10 @@ Open the full GIF directly: [docs/media/iridium-20260312.gif](docs/media/iridium
 ./ns3 run orbitshield-load-from-tle
 ./ns3 run orbitshield-load-from-yaml
 ./ns3 run orbitshield-dynamic-topology
-./ns3 run orbitshield-scenario3-grayhole -- \
-  --config=contrib/orbitshield/data/scenarios/scenario3-grayhole.yaml \
+./ns3 run orbitshield-targeted-flow-grayhole -- \
+  --config=contrib/orbitshield/experiments/targeted-flow-grayhole/profiles/targeted-flow-grayhole.yaml \
   --durationSeconds=300 \
-  --outputDir=contrib/orbitshield/results/scenario3-smoke
+  --outputDir=contrib/orbitshield/results/targeted-flow-grayhole-smoke
 ```
 
 ## API Reference
@@ -602,10 +603,8 @@ All public headers are exposed via the convenience include `ns3/orbitshield-modu
 - [`model/isl-propagation-delay-model.h`](model/isl-propagation-delay-model.h) — ISL delay model
 - [`model/orbitshield-routing-helper.h`](model/orbitshield-routing-helper.h) — `OrbitShieldRoutingHelper`
 - [`model/orbitshield-grayhole-policy.h`](model/orbitshield-grayhole-policy.h) — `OrbitShieldGrayholePolicy`
-- [`model/orbitshield-scenario3-config.h`](model/orbitshield-scenario3-config.h) — Scenario 3 profile loader
-- [`model/orbitshield-scenario3-detector.h`](model/orbitshield-scenario3-detector.h) — deterministic Scenario 3 detector
-- [`model/orbitshield-scenario3-experiment.h`](model/orbitshield-scenario3-experiment.h) — Scenario 3 experiment driver
-- [`model/orbitshield-scenario3-telemetry.h`](model/orbitshield-scenario3-telemetry.h) — Scenario 3 telemetry collector
+
+Experiment-local headers under [experiments/targeted-flow-grayhole](experiments/targeted-flow-grayhole) are compiled into that workflow and its tests; they are not exported by `ns3/orbitshield-module.h`.
 
 Common entry points:
 
