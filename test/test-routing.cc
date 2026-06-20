@@ -4,8 +4,14 @@
 
 #include "test-routing.h"
 #include "ns3/orbitshield-module.h"
+#include "../experiments/targeted-flow-grayhole/targeted-flow-grayhole-config.h"
+#include "../experiments/targeted-flow-grayhole/targeted-flow-grayhole-detector.h"
+#include "../experiments/targeted-flow-grayhole/targeted-flow-grayhole-runner.h"
+#include "../experiments/targeted-flow-grayhole/targeted-flow-grayhole-telemetry.h"
+#include "ns3/constant-position-mobility-model.h"
 #include "ns3/test.h"
 #include "ns3/ipv4.h"
+#include "ns3/ipv4-header.h"
 #include "ns3/ipv4-routing-table-entry.h"
 #include "ns3/ipv4-static-routing-helper.h"
 #include "ns3/ping-helper.h"
@@ -13,10 +19,15 @@
 #include "ns3/simulator.h"
 
 #include <algorithm>
+#include <fstream>
+#include <cstdio>
+#include <limits.h>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+
+#include <unistd.h>
 
 using namespace ns3;
 
@@ -33,6 +44,13 @@ struct GsPairResult
     uint32_t replyCount{0};  ///< Number of ICMP echo replies received for this pair.
     Time maxRtt{Seconds(0)}; ///< Maximum RTT observed for this pair.
     bool allRttsValid{true}; ///< True if every observed RTT was <= 500 ms.
+};
+
+struct GrayholePolicyCounters
+{
+    uint32_t receiveCount{0};
+    uint32_t dropDecisionCount{0};
+    uint32_t forwardDecisionCount{0};
 };
 
 /**
@@ -54,6 +72,49 @@ OnGsPairRtt(GsPairResult* result, uint16_t seq, Time rtt)
     if (rtt > MilliSeconds(500))
     {
         result->allRttsValid = false;
+    }
+}
+
+bool
+OnGrayholeReceive(GrayholePolicyCounters* counters,
+                  Ptr<NetDevice> device,
+                  Ptr<const Packet> packet,
+                  uint16_t protocol,
+                  const Address& sender)
+{
+    (void)device;
+    (void)packet;
+    (void)protocol;
+    (void)sender;
+    ++counters->receiveCount;
+    return true;
+}
+
+void
+OnGrayholeDecision(GrayholePolicyCounters* counters,
+                   Time time,
+                   uint32_t nodeId,
+                   std::string nodeName,
+                   Ipv4Address source,
+                   Ipv4Address destination,
+                   std::string targetPairId,
+                   std::string reason,
+                   bool dropped)
+{
+    (void)time;
+    (void)nodeId;
+    (void)nodeName;
+    (void)source;
+    (void)destination;
+    (void)targetPairId;
+    (void)reason;
+    if (dropped)
+    {
+        ++counters->dropDecisionCount;
+    }
+    else
+    {
+        ++counters->forwardDecisionCount;
     }
 }
 
@@ -191,6 +252,129 @@ FindHostRoute(Ptr<Ipv4StaticRouting> staticRouting,
     return false;
 }
 
+bool
+LinkConnectsNodes(Ptr<SatelliteLink> link, Ptr<Node> firstNode, Ptr<Node> secondNode)
+{
+    if (!link || !firstNode || !secondNode || !link->IsActive())
+    {
+        return false;
+    }
+
+    Ptr<NetDevice> firstDevice = link->GetDevice(0);
+    Ptr<NetDevice> secondDevice = link->GetDevice(1);
+    if (!firstDevice || !secondDevice)
+    {
+        return false;
+    }
+
+    Ptr<Node> linkFirstNode = firstDevice->GetNode();
+    Ptr<Node> linkSecondNode = secondDevice->GetNode();
+    return (linkFirstNode == firstNode && linkSecondNode == secondNode) ||
+           (linkFirstNode == secondNode && linkSecondNode == firstNode);
+}
+
+bool
+HasActiveLinkBetween(Ptr<Constellation> constellation, Ptr<Node> firstNode, Ptr<Node> secondNode)
+{
+    if (!constellation)
+    {
+        return false;
+    }
+
+    for (const auto& link : constellation->GetCurrentIsls())
+    {
+        if (LinkConnectsNodes(link, firstNode, secondNode))
+        {
+            return true;
+        }
+    }
+    for (const auto& link : constellation->GetCurrentGroundLinks())
+    {
+        if (LinkConnectsNodes(link, firstNode, secondNode))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+Ptr<Packet>
+CreateIpv4TestPacket(Ipv4Address source, Ipv4Address destination)
+{
+    Ptr<Packet> packet = Create<Packet>(32);
+    Ipv4Header header;
+    header.SetSource(source);
+    header.SetDestination(destination);
+    header.SetProtocol(1);
+    header.SetPayloadSize(packet->GetSize());
+    packet->AddHeader(header);
+    return packet;
+}
+
+void
+AttachFixedMobility(Ptr<Node> node, const Vector& position)
+{
+    Ptr<ConstantPositionMobilityModel> mobility = CreateObject<ConstantPositionMobilityModel>();
+    mobility->SetPosition(position);
+    node->AggregateObject(mobility);
+}
+
+std::vector<std::string>
+ReadTextLines(const std::string& path)
+{
+    std::vector<std::string> lines;
+    std::ifstream input(path);
+    std::string line;
+    while (std::getline(input, line))
+    {
+        lines.push_back(line);
+    }
+    return lines;
+}
+
+std::vector<std::string>
+CollectTransitSatelliteNames(const std::vector<Ptr<Node>>& path)
+{
+    std::vector<std::string> satelliteNames;
+    if (path.size() <= 2)
+    {
+        return satelliteNames;
+    }
+
+    for (std::size_t pathIndex = 1; pathIndex + 1 < path.size(); ++pathIndex)
+    {
+        Ptr<Satellite> satellite = DynamicCast<Satellite>(path[pathIndex]);
+        if (satellite)
+        {
+            satelliteNames.push_back(satellite->GetName());
+        }
+    }
+    return satelliteNames;
+}
+
+bool
+PathContainsSatellite(const std::vector<Ptr<Node>>& path, const std::string& satelliteName)
+{
+    const auto satelliteNames = CollectTransitSatelliteNames(path);
+    return std::find(satelliteNames.begin(), satelliteNames.end(), satelliteName) != satelliteNames.end();
+}
+
+OrbitShieldTargetedFlowGrayholeFlowSample
+MakeDetectorSample(uint32_t sent, uint32_t replies, bool attackActive)
+{
+    OrbitShieldTargetedFlowGrayholeFlowSample sample;
+    sample.time = attackActive ? Seconds(150.0) : Seconds(50.0);
+    sample.flowId = attackActive ? "target" : "background";
+    sample.source = "Tempe";
+    sample.destination = "Fairbanks";
+    sample.sent = sent;
+    sample.replies = replies;
+    sample.pdr = sent == 0 ? 0.0 : static_cast<double>(replies) / static_cast<double>(sent);
+    sample.rtt = MilliSeconds(100);
+    sample.attackActive = attackActive;
+    return sample;
+}
+
 uint32_t
 ComputeStaticHostRouteHopCount(Ptr<Node> source,
                                Ptr<Node> destinationNode,
@@ -258,6 +442,16 @@ ComputeStaticHostRouteHopCount(Ptr<Node> source,
     }
 
     return (current == destinationNode) ? hops : 0;
+}
+
+std::string
+WriteTargetedFlowGrayholeProfile(const std::string& filename, const std::string& body)
+{
+    const std::string path = filename;
+    std::ofstream output(path);
+    output << body;
+    output.close();
+    return path;
 }
 
 } // namespace
@@ -620,6 +814,557 @@ OrbitShieldIpv4AddressAssignmentTest::DoRun()
     }
 
     NS_LOG_INFO("Sequential /30 allocation verified: " << totalLinks << " link(s), all blocks correct");
+    Simulator::Destroy();
+}
+
+OrbitShieldTargetedFlowGrayholeTelemetryTest::OrbitShieldTargetedFlowGrayholeTelemetryTest()
+    : TestCase("OrbitShieldTargetedFlowGrayholeTelemetryTest")
+{
+}
+
+OrbitShieldTargetedFlowGrayholeTelemetryTest::~OrbitShieldTargetedFlowGrayholeTelemetryTest()
+{
+}
+
+void
+OrbitShieldTargetedFlowGrayholeTelemetryTest::DoRun()
+{
+    OrbitShieldTargetedFlowGrayholeTelemetry telemetry;
+    const Time attackStart = Seconds(100.0);
+    const Time attackStop = Seconds(200.0);
+
+    telemetry.RecordFlowSample(Seconds(50.0),
+                               "Tempe-Fairbanks",
+                               "Tempe",
+                               "Fairbanks",
+                               4,
+                               4,
+                               MilliSeconds(120),
+                               attackStart,
+                               attackStop);
+    telemetry.RecordFlowSample(Seconds(150.0),
+                               "Tempe-Fairbanks",
+                               "Tempe",
+                               "Fairbanks",
+                               5,
+                               1,
+                               MilliSeconds(180),
+                               attackStart,
+                               attackStop);
+    telemetry.RecordFlowSample(Seconds(250.0),
+                               "Tempe-Fairbanks",
+                               "Tempe",
+                               "Fairbanks",
+                               3,
+                               3,
+                               MilliSeconds(110),
+                               attackStart,
+                               attackStop);
+    telemetry.RecordRouteSnapshot(Seconds(150.0),
+                                  "Tempe-Fairbanks",
+                                  {"Tempe", "IRIDIUM 113", "Fairbanks"});
+    telemetry.RecordForwardingEvent(Seconds(150.0),
+                                    42,
+                                    "IRIDIUM 113",
+                                    Ipv4Address("10.1.0.1"),
+                                    Ipv4Address("10.2.0.1"),
+                                    "Tempe-Fairbanks",
+                                    "grayhole-drop",
+                                    true);
+    telemetry.RecordNodeLabel(Seconds(150.0), "IRIDIUM 113", true, false);
+    telemetry.RecordMitigationEvent(Seconds(180.0),
+                                    "IRIDIUM 113",
+                                    "flagged",
+                                    "target-pdr-below-threshold");
+
+    NS_TEST_ASSERT_MSG_EQ(telemetry.GetFlowSamples().size(),
+                          3u,
+                          "Telemetry should keep in-memory flow samples");
+    NS_TEST_EXPECT_MSG_EQ(telemetry.GetFlowSamples()[0].attackActive,
+                          false,
+                          "Pre-attack flow window should not be labeled attack-active");
+    NS_TEST_EXPECT_MSG_EQ(telemetry.GetFlowSamples()[1].attackActive,
+                          true,
+                          "Flow sample inside attack window should be labeled attack-active");
+    NS_TEST_EXPECT_MSG_EQ(telemetry.GetFlowSamples()[2].attackActive,
+                          false,
+                          "Post-attack flow window should not be labeled attack-active");
+    NS_TEST_EXPECT_MSG_EQ(telemetry.GetFlowSamples()[1].pdr,
+                          0.2,
+                          "Flow sample should compute packet delivery ratio from replies/sent");
+    NS_TEST_ASSERT_MSG_EQ(telemetry.GetRouteSnapshots().size(),
+                          1u,
+                          "Telemetry should keep route snapshots");
+    NS_TEST_EXPECT_MSG_EQ(telemetry.GetRouteSnapshots().front().path.size(),
+                          3u,
+                          "Route snapshot should keep route membership path");
+    NS_TEST_ASSERT_MSG_EQ(telemetry.GetForwardingEvents().size(),
+                          1u,
+                          "Telemetry should keep forwarding events");
+    NS_TEST_EXPECT_MSG_EQ(telemetry.GetForwardingEvents().front().dropped,
+                          true,
+                          "Forwarding event should preserve drop label");
+    NS_TEST_ASSERT_MSG_EQ(telemetry.GetNodeLabels().size(),
+                          1u,
+                          "Telemetry should keep node labels");
+    NS_TEST_EXPECT_MSG_EQ(telemetry.GetNodeLabels().front().compromised,
+                          true,
+                          "Node label should preserve compromised flag");
+    NS_TEST_ASSERT_MSG_EQ(telemetry.GetMitigationEvents().size(),
+                          1u,
+                          "Telemetry should keep mitigation events");
+    NS_TEST_EXPECT_MSG_EQ(telemetry.GetMitigationEvents().front().action,
+                          std::string("flagged"),
+                          "Mitigation event should preserve action");
+
+    const std::string outputDir = CreateTempDirFilename("orbitshield-targeted-flow-grayhole-telemetry");
+    telemetry.SetOutputDir(outputDir);
+    telemetry.SetWriteCsv(true);
+    std::string error;
+    NS_TEST_ASSERT_MSG_EQ(telemetry.WriteCsv(&error),
+                          true,
+                          "Telemetry CSV writer should succeed: " << error);
+
+    const auto flowLines = ReadTextLines(outputDir + "/flow_samples.csv");
+    const auto routeLines = ReadTextLines(outputDir + "/route_snapshots.csv");
+    const auto forwardingLines = ReadTextLines(outputDir + "/forwarding_events.csv");
+    const auto labelLines = ReadTextLines(outputDir + "/node_labels.csv");
+    const auto mitigationLines = ReadTextLines(outputDir + "/mitigation_events.csv");
+
+    NS_TEST_ASSERT_MSG_GT(flowLines.size(), 1u, "flow_samples.csv should contain a header and data");
+    NS_TEST_ASSERT_MSG_GT(routeLines.size(), 1u, "route_snapshots.csv should contain a header and data");
+    NS_TEST_ASSERT_MSG_GT(forwardingLines.size(),
+                          1u,
+                          "forwarding_events.csv should contain a header and data");
+    NS_TEST_ASSERT_MSG_GT(labelLines.size(), 1u, "node_labels.csv should contain a header and data");
+    NS_TEST_ASSERT_MSG_GT(mitigationLines.size(),
+                          1u,
+                          "mitigation_events.csv should contain a header and data");
+    NS_TEST_EXPECT_MSG_EQ(flowLines.front(),
+                          std::string("time_seconds,flow_id,source,destination,sent,replies,pdr,rtt_ms,attack_active"),
+                          "flow_samples.csv header should be stable");
+    NS_TEST_EXPECT_MSG_EQ(routeLines.front(),
+                          std::string("time_seconds,flow_id,path"),
+                          "route_snapshots.csv header should be stable");
+    NS_TEST_EXPECT_MSG_EQ(forwardingLines.front(),
+                          std::string("time_seconds,node_id,node_name,source,destination,target_pair_id,reason,dropped"),
+                          "forwarding_events.csv header should be stable");
+    NS_TEST_EXPECT_MSG_EQ(labelLines.front(),
+                          std::string("time_seconds,node_name,compromised,flagged"),
+                          "node_labels.csv header should be stable");
+    NS_TEST_EXPECT_MSG_EQ(mitigationLines.front(),
+                          std::string("time_seconds,node_name,action,reason"),
+                          "mitigation_events.csv header should be stable");
+}
+
+OrbitShieldRouteExclusionTest::OrbitShieldRouteExclusionTest()
+    : TestCase("OrbitShieldRouteExclusionTest")
+{
+}
+
+OrbitShieldRouteExclusionTest::~OrbitShieldRouteExclusionTest()
+{
+}
+
+void
+OrbitShieldRouteExclusionTest::DoRun()
+{
+    Ptr<Constellation> constellation = CreateObject<Constellation>();
+    constellation->LoadFromRingFile("contrib/orbitshield/data/iridium-20260312.yaml");
+    constellation->SetIslRefreshInterval(Seconds(30.0));
+    constellation->CreateIslLinks(2000000.0);
+    constellation->CreateGroundLinks(50000000.0);
+    constellation->RefreshIslTopology();
+
+    OrbitShieldRoutingHelper routingHelper;
+    routingHelper.Install(constellation);
+
+    Ptr<GroundStation> tempe = FindGroundStationByName(constellation->GetGroundStations(), "Tempe");
+    Ptr<GroundStation> fairbanks =
+        FindGroundStationByName(constellation->GetGroundStations(), "Fairbanks");
+    NS_TEST_ASSERT_MSG_NE(tempe, nullptr, "Tempe ground station must exist in Iridium dataset");
+    NS_TEST_ASSERT_MSG_NE(fairbanks, nullptr, "Fairbanks ground station must exist in Iridium dataset");
+
+    const Ipv4Address destination = GetFirstNonLoopbackAddress(fairbanks);
+    NS_TEST_ASSERT_MSG_NE(destination,
+                          Ipv4Address::GetZero(),
+                          "Fairbanks must have a routable address after Install");
+
+    const auto originalPath = routingHelper.GetRoutePath(tempe, destination);
+    const auto originalTransitSatellites = CollectTransitSatelliteNames(originalPath);
+    NS_TEST_ASSERT_MSG_GT(originalTransitSatellites.size(),
+                          0u,
+                          "Initial target route should include satellite transit nodes");
+
+    std::string excludedWithAlternate;
+    std::vector<Ptr<Node>> alternatePath;
+    for (const auto& candidateSatellite : originalTransitSatellites)
+    {
+        routingHelper.ClearExcludedSatellites();
+        routingHelper.AddExcludedSatellite(candidateSatellite);
+        routingHelper.RecomputeRoutes(constellation);
+        const auto candidatePath = routingHelper.GetRoutePath(tempe, destination);
+        if (!candidatePath.empty() && !PathContainsSatellite(candidatePath, candidateSatellite))
+        {
+            excludedWithAlternate = candidateSatellite;
+            alternatePath = candidatePath;
+            break;
+        }
+    }
+
+    NS_TEST_ASSERT_MSG_NE(excludedWithAlternate,
+                          std::string(),
+                          "At least one original transit satellite should have an alternate route");
+    NS_TEST_EXPECT_MSG_EQ(PathContainsSatellite(alternatePath, excludedWithAlternate),
+                          false,
+                          "Excluded satellite should not appear in recomputed alternate route");
+    const auto excludedSatellites = routingHelper.GetExcludedSatellites();
+    NS_TEST_ASSERT_MSG_EQ(excludedSatellites.size(),
+                          1u,
+                          "Routing helper should report one excluded satellite");
+    NS_TEST_EXPECT_MSG_EQ(excludedSatellites.front(),
+                          excludedWithAlternate,
+                          "Routing helper should report the selected excluded satellite");
+
+    std::vector<std::string> allSatelliteNames;
+    for (const auto& satellite : constellation->GetSatellites())
+    {
+        allSatelliteNames.push_back(satellite->GetName());
+    }
+    routingHelper.SetExcludedSatellites(allSatelliteNames);
+    routingHelper.RecomputeRoutes(constellation);
+    NS_TEST_EXPECT_MSG_EQ(routingHelper.GetRoutePath(tempe, destination).empty(),
+                          true,
+                          "No path should remain when every satellite is excluded");
+
+    Ipv4StaticRoutingHelper staticRoutingHelper;
+    Ptr<Ipv4StaticRouting> staticRouting = staticRoutingHelper.GetStaticRouting(tempe->GetObject<Ipv4>());
+    Ipv4RoutingTableEntry staleRoute;
+    NS_TEST_EXPECT_MSG_EQ(FindHostRoute(staticRouting, destination, staleRoute),
+                          false,
+                          "Unreachable destination should not retain a stale host route");
+
+    Simulator::Destroy();
+}
+
+OrbitShieldTargetedFlowGrayholeDetectorTest::OrbitShieldTargetedFlowGrayholeDetectorTest()
+    : TestCase("OrbitShieldTargetedFlowGrayholeDetectorTest")
+{
+}
+
+OrbitShieldTargetedFlowGrayholeDetectorTest::~OrbitShieldTargetedFlowGrayholeDetectorTest()
+{
+}
+
+void
+OrbitShieldTargetedFlowGrayholeDetectorTest::DoRun()
+{
+    OrbitShieldTargetedFlowGrayholeDetector detector;
+    detector.SetMinSamples(3);
+    detector.SetTargetPdrThreshold(0.6);
+    detector.SetScoreThreshold(1.0);
+    detector.SetMaxFlaggedSatellites(4);
+
+    detector.ObserveWindow(MakeDetectorSample(5, 1, true),
+                           {"IRIDIUM 113", "IRIDIUM 116"},
+                           true);
+    detector.ObserveWindow(MakeDetectorSample(5, 0, true), {"IRIDIUM 120"}, false);
+    detector.ObserveWindow(MakeDetectorSample(5, 5, false), {"IRIDIUM 130"}, true);
+    detector.ObserveWindow(MakeDetectorSample(2, 0, true), {"IRIDIUM 131"}, true);
+
+    const auto flaggedSatellites = detector.GetFlaggedSatellites();
+    NS_TEST_ASSERT_MSG_EQ(flaggedSatellites.size(),
+                          2u,
+                          "Only satellites on low-PDR target routes should be flagged");
+    NS_TEST_EXPECT_MSG_EQ(flaggedSatellites[0],
+                          std::string("IRIDIUM 113"),
+                          "First target route satellite should be flagged");
+    NS_TEST_EXPECT_MSG_EQ(flaggedSatellites[1],
+                          std::string("IRIDIUM 116"),
+                          "Second target route satellite should be flagged");
+    NS_TEST_EXPECT_MSG_EQ(detector.GetScore("IRIDIUM 120"),
+                          0.0,
+                          "Non-target traffic should not create detector score");
+    NS_TEST_EXPECT_MSG_EQ(detector.GetScore("IRIDIUM 130"),
+                          0.0,
+                          "Healthy target window should not create detector score");
+    NS_TEST_EXPECT_MSG_EQ(detector.GetScore("IRIDIUM 131"),
+                          0.0,
+                          "Windows below the minimum sample count should not create detector score");
+
+    detector.SetMaxFlaggedSatellites(1);
+    NS_TEST_EXPECT_MSG_EQ(detector.GetFlaggedSatellites().size(),
+                          1u,
+                          "Detector should respect the mitigation exclusion cap");
+    detector.SetMaxFlaggedSatellites(0);
+    NS_TEST_EXPECT_MSG_EQ(detector.GetFlaggedSatellites().empty(),
+                          true,
+                          "Detector should allow zero configured exclusions");
+}
+
+OrbitShieldTargetedFlowGrayholeExperimentTest::OrbitShieldTargetedFlowGrayholeExperimentTest()
+    : TestCase("OrbitShieldTargetedFlowGrayholeExperimentTest")
+{
+}
+
+OrbitShieldTargetedFlowGrayholeExperimentTest::~OrbitShieldTargetedFlowGrayholeExperimentTest()
+{
+}
+
+void
+OrbitShieldTargetedFlowGrayholeExperimentTest::DoRun()
+{
+    OrbitShieldTargetedFlowGrayholeConfig config;
+    std::string error;
+    NS_TEST_ASSERT_MSG_EQ(LoadOrbitShieldTargetedFlowGrayholeConfig(
+                              "contrib/orbitshield/experiments/targeted-flow-grayhole/profiles/targeted-flow-grayhole.yaml",
+                              config,
+                              &error),
+                          true,
+                          "Default targeted-flow grayhole profile should load: " << error);
+
+    config.simulation.durationSeconds = 300.0;
+    config.attack.startSeconds = 60.0;
+    config.attack.stopSeconds = 240.0;
+    config.detection.windowSeconds = 60.0;
+    config.attack.dropProbability = 1.0;
+    config.telemetry.outputDir = CreateTempDirFilename("orbitshield-targeted-flow-grayhole-experiment");
+
+    Ptr<Constellation> experimentConstellation = CreateObject<Constellation>();
+    experimentConstellation->LoadFromRingFile(config.constellation.ringFile);
+    config.attack.compromisedSatellites.clear();
+    for (const auto& satellite : experimentConstellation->GetSatellites())
+    {
+        config.attack.compromisedSatellites.push_back(satellite->GetName());
+    }
+
+    OrbitShieldTargetedFlowGrayholeExperimentSummary summary;
+    NS_TEST_ASSERT_MSG_EQ(RunOrbitShieldTargetedFlowGrayholeExperiment(config, summary, &error),
+                          true,
+                          "Short targeted-flow grayhole experiment should run: " << error);
+    NS_TEST_EXPECT_MSG_GT(summary.baselinePdr,
+                          summary.attackPdr,
+                          "Target PDR should be lower during the attack than baseline");
+    NS_TEST_EXPECT_MSG_GT(summary.dropEvents,
+                          0u,
+                          "Grayhole experiment should record at least one drop event");
+    NS_TEST_EXPECT_MSG_GT(summary.mitigationEvents,
+                          0u,
+                          "Mitigation-enabled experiment should record mitigation events");
+    NS_TEST_EXPECT_MSG_GT(summary.excludedSatellites.size(),
+                          0u,
+                          "Mitigation-enabled experiment should exclude at least one satellite");
+
+    const auto mitigationLines = ReadTextLines(config.telemetry.outputDir + "/mitigation_events.csv");
+    NS_TEST_ASSERT_MSG_GT(mitigationLines.size(),
+                          1u,
+                          "Mitigation-enabled experiment should write mitigation CSV rows");
+
+    OrbitShieldTargetedFlowGrayholeConfig noMitigation = config;
+    noMitigation.mitigation.enabled = false;
+    noMitigation.telemetry.outputDir = CreateTempDirFilename("orbitshield-targeted-flow-grayhole-experiment-no-mitigation");
+    OrbitShieldTargetedFlowGrayholeExperimentSummary noMitigationSummary;
+    NS_TEST_ASSERT_MSG_EQ(RunOrbitShieldTargetedFlowGrayholeExperiment(noMitigation,
+                                                            noMitigationSummary,
+                                                            &error),
+                          true,
+                          "No-mitigation targeted-flow grayhole experiment should run: " << error);
+    NS_TEST_EXPECT_MSG_GT(noMitigationSummary.dropEvents,
+                          0u,
+                          "No-mitigation variant should still record grayhole drops");
+    NS_TEST_EXPECT_MSG_EQ(noMitigationSummary.mitigationEvents,
+                          0u,
+                          "No-mitigation variant should not record mitigation events");
+    NS_TEST_EXPECT_MSG_EQ(noMitigationSummary.excludedSatellites.empty(),
+                          true,
+                          "No-mitigation variant should not exclude satellites");
+}
+
+OrbitShieldGrayholePolicyTest::OrbitShieldGrayholePolicyTest()
+    : TestCase("OrbitShieldGrayholePolicyTest")
+{
+}
+
+OrbitShieldGrayholePolicyTest::~OrbitShieldGrayholePolicyTest()
+{
+}
+
+void
+OrbitShieldGrayholePolicyTest::DoRun()
+{
+    std::string tleLine1 = "1 25544U 98067A   22071.78032407  .00021395  00000-0  39008-3 0  9996";
+    std::string tleLine2 = "2 25544  51.6424  94.0370 0004047 256.5103  89.8846 15.49386383330227";
+    perturb::JulianDate simulationStart(perturb::DateTime(2026, 1, 1, 0, 0, 0));
+
+    Ptr<Satellite> compromisedSatellite =
+        CreateObject<Satellite>("IRIDIUM 113", tleLine1, tleLine2, simulationStart);
+    Ptr<Satellite> peerSatellite =
+        CreateObject<Satellite>("IRIDIUM 116", tleLine1, tleLine2, simulationStart);
+    AttachFixedMobility(compromisedSatellite, Vector(0.0, 0.0, 0.0));
+    AttachFixedMobility(peerSatellite, Vector(1.0, 0.0, 0.0));
+
+    Ptr<SatelliteNetDevice> compromisedDevice = CreateObject<SatelliteNetDevice>();
+    Ptr<SatelliteNetDevice> peerDevice = CreateObject<SatelliteNetDevice>();
+    compromisedDevice->SetNode(compromisedSatellite);
+    peerDevice->SetNode(peerSatellite);
+    compromisedSatellite->AddDevice(compromisedDevice);
+    peerSatellite->AddDevice(peerDevice);
+
+    Ptr<SatelliteLink> link = CreateObject<SatelliteLink>(compromisedDevice, peerDevice);
+    link->SetMaxRange(100.0);
+
+    GrayholePolicyCounters counters;
+    peerDevice->SetReceiveCallback(MakeBoundCallback(&OnGrayholeReceive, &counters));
+
+    Ptr<OrbitShieldGrayholePolicy> policy = CreateObject<OrbitShieldGrayholePolicy>();
+    policy->SetCompromisedSatellites({"IRIDIUM 113"});
+    policy->SetAttackWindow(Seconds(0.0), Seconds(10.0));
+    policy->SetDropProbability(1.0);
+    policy->SetDirection(OrbitShieldGrayholeDirection::BIDIRECTIONAL);
+    policy->AddTargetPair(Ipv4Address("10.1.0.1"),
+                          Ipv4Address("10.2.0.1"),
+                          {"IRIDIUM 113"},
+                          "Tempe-Fairbanks");
+    policy->SetDecisionCallback(MakeBoundCallback(&OnGrayholeDecision, &counters));
+    compromisedDevice->SetForwardingPolicy(policy);
+
+    const bool targetAccepted = compromisedDevice->Send(
+        CreateIpv4TestPacket(Ipv4Address("10.1.0.1"), Ipv4Address("10.2.0.1")),
+        peerDevice->GetAddress(),
+        0x0800);
+    Simulator::Run();
+    NS_TEST_EXPECT_MSG_EQ(targetAccepted,
+                          true,
+                          "Policy-dropped target packet should be accepted by the device send path");
+    NS_TEST_EXPECT_MSG_EQ(counters.receiveCount,
+                          0u,
+                          "Matching target packet should not be delivered during active grayhole window");
+    NS_TEST_EXPECT_MSG_EQ(counters.dropDecisionCount,
+                          1u,
+                          "Exactly one drop decision should be emitted for the dropped target packet");
+
+    const bool nonTargetAccepted = compromisedDevice->Send(
+        CreateIpv4TestPacket(Ipv4Address("10.3.0.1"), Ipv4Address("10.4.0.1")),
+        peerDevice->GetAddress(),
+        0x0800);
+    Simulator::Run();
+    NS_TEST_EXPECT_MSG_EQ(nonTargetAccepted, true, "Non-target packet should be forwarded normally");
+    NS_TEST_EXPECT_MSG_EQ(counters.receiveCount,
+                          1u,
+                          "Non-target packet should be delivered through the same device");
+    NS_TEST_EXPECT_MSG_EQ(counters.dropDecisionCount,
+                          1u,
+                          "Non-target packet should not emit an additional drop decision");
+
+    policy->SetAttackWindow(Seconds(10.0), Seconds(20.0));
+    const bool outsideWindowAccepted = compromisedDevice->Send(
+        CreateIpv4TestPacket(Ipv4Address("10.1.0.1"), Ipv4Address("10.2.0.1")),
+        peerDevice->GetAddress(),
+        0x0800);
+    Simulator::Run();
+    NS_TEST_EXPECT_MSG_EQ(outsideWindowAccepted,
+                          true,
+                          "Target packet outside the attack window should be forwarded");
+    NS_TEST_EXPECT_MSG_EQ(counters.receiveCount,
+                          2u,
+                          "Target packet outside the attack window should be delivered");
+    NS_TEST_EXPECT_MSG_EQ(counters.dropDecisionCount,
+                          1u,
+                          "Outside-window target packet should not emit a drop decision");
+
+    policy->SetAttackWindow(Seconds(0.0), Seconds(10.0));
+    policy->SetTargetRouteSatellites(Ipv4Address("10.1.0.1"), Ipv4Address("10.2.0.1"), {});
+    const bool routeInactiveAccepted = compromisedDevice->Send(
+        CreateIpv4TestPacket(Ipv4Address("10.1.0.1"), Ipv4Address("10.2.0.1")),
+        peerDevice->GetAddress(),
+        0x0800);
+    Simulator::Run();
+    NS_TEST_EXPECT_MSG_EQ(routeInactiveAccepted,
+                          true,
+                          "Target packet should be forwarded when the compromised satellite is not route-active");
+    NS_TEST_EXPECT_MSG_EQ(counters.receiveCount,
+                          3u,
+                          "Route-inactive target packet should be delivered");
+    NS_TEST_EXPECT_MSG_EQ(counters.dropDecisionCount,
+                          1u,
+                          "Route-inactive target packet should not emit a drop decision");
+    NS_TEST_EXPECT_MSG_GT(counters.forwardDecisionCount,
+                          0u,
+                          "Forward decisions should be emitted for matching target packets that are not dropped");
+
+    Simulator::Destroy();
+}
+
+OrbitShieldRouteMembershipTest::OrbitShieldRouteMembershipTest()
+    : TestCase("OrbitShieldRouteMembershipTest")
+{
+}
+
+OrbitShieldRouteMembershipTest::~OrbitShieldRouteMembershipTest()
+{
+}
+
+void
+OrbitShieldRouteMembershipTest::DoRun()
+{
+    Ptr<Constellation> constellation = CreateObject<Constellation>();
+    constellation->LoadFromRingFile("contrib/orbitshield/data/iridium-20260312.yaml");
+    constellation->SetIslRefreshInterval(Seconds(30.0));
+    constellation->CreateIslLinks(2000000.0);
+    constellation->CreateGroundLinks(50000000.0);
+    constellation->RefreshIslTopology();
+
+    OrbitShieldRoutingHelper routingHelper;
+    routingHelper.Install(constellation);
+
+    Ptr<GroundStation> tempe = FindGroundStationByName(constellation->GetGroundStations(), "Tempe");
+    Ptr<GroundStation> fairbanks =
+        FindGroundStationByName(constellation->GetGroundStations(), "Fairbanks");
+
+    NS_TEST_ASSERT_MSG_NE(tempe, nullptr, "Tempe ground station must exist in Iridium dataset");
+    NS_TEST_ASSERT_MSG_NE(fairbanks, nullptr, "Fairbanks ground station must exist in Iridium dataset");
+
+    Ipv4Address destination = GetFirstNonLoopbackAddress(fairbanks);
+    NS_TEST_ASSERT_MSG_NE(destination,
+                          Ipv4Address::GetZero(),
+                          "Fairbanks must have a non-loopback address after routing install");
+
+    const auto path = routingHelper.GetRoutePath(tempe, destination);
+    NS_TEST_ASSERT_MSG_GT(path.size(), 1u, "Tempe-to-Fairbanks route path should be non-empty");
+    NS_TEST_EXPECT_MSG_EQ(path.front(), tempe, "Route path should start at Tempe");
+    NS_TEST_EXPECT_MSG_EQ(path.back(), fairbanks, "Route path should end at Fairbanks");
+    NS_TEST_EXPECT_MSG_EQ(routingHelper.GetRouteHopCount(tempe, destination),
+                          static_cast<uint32_t>(path.size() - 1),
+                          "Route hop count should match path transitions");
+
+    bool hasSatelliteTransit = false;
+    for (std::size_t pathIndex = 1; pathIndex + 1 < path.size(); ++pathIndex)
+    {
+        if (DynamicCast<Satellite>(path[pathIndex]))
+        {
+            hasSatelliteTransit = true;
+        }
+
+        NS_TEST_EXPECT_MSG_EQ(HasActiveLinkBetween(constellation, path[pathIndex - 1], path[pathIndex]),
+                              true,
+                              "Every returned route transition should be backed by an active link");
+    }
+    NS_TEST_EXPECT_MSG_EQ(HasActiveLinkBetween(constellation,
+                                               path[path.size() - 2],
+                                               path.back()),
+                          true,
+                          "Final route transition should be backed by an active link");
+
+    if (path.size() > 2)
+    {
+        NS_TEST_EXPECT_MSG_EQ(hasSatelliteTransit,
+                              true,
+                              "Multi-hop Tempe-to-Fairbanks route should include a satellite transit node");
+        NS_TEST_EXPECT_MSG_GT(routingHelper.GetTransitSatelliteNames(tempe, destination).size(),
+                              0u,
+                              "Transit satellite name helper should report satellite membership");
+    }
+
     Simulator::Destroy();
 }
 
@@ -1154,6 +1899,286 @@ OrbitShieldStaticRoutingStrategyTest::DoRun()
                           0u,
                           "Static routing must deliver at least one ICMP echo reply under a "
                           "15-second refresh interval over 300 seconds");
+
+    Simulator::Destroy();
+}
+
+OrbitShieldTargetedFlowGrayholeConfigTest::OrbitShieldTargetedFlowGrayholeConfigTest()
+    : TestCase("OrbitShieldTargetedFlowGrayholeConfigTest")
+{
+}
+
+OrbitShieldTargetedFlowGrayholeConfigTest::~OrbitShieldTargetedFlowGrayholeConfigTest()
+{
+}
+
+void
+OrbitShieldTargetedFlowGrayholeConfigTest::DoRun()
+{
+    OrbitShieldTargetedFlowGrayholeConfig config;
+    std::string error;
+    const bool loaded = LoadOrbitShieldTargetedFlowGrayholeConfig(
+        "contrib/orbitshield/experiments/targeted-flow-grayhole/profiles/targeted-flow-grayhole.yaml",
+        config,
+        &error);
+
+    NS_TEST_ASSERT_MSG_EQ(loaded, true, "Default targeted-flow grayhole profile should load: " << error);
+    NS_TEST_EXPECT_MSG_EQ(config.constellation.ringFile,
+                          std::string("contrib/orbitshield/data/iridium-20260312.yaml"),
+                          "Ring file path should resolve relative to the profile directory");
+    NS_TEST_EXPECT_MSG_EQ(config.simulation.durationSeconds,
+                          3000.0,
+                          "Default duration should match the targeted-flow grayhole profile");
+    NS_TEST_EXPECT_MSG_EQ(config.simulation.seed, 1u, "Default RNG seed should be 1");
+    NS_TEST_EXPECT_MSG_EQ(config.simulation.run, 1u, "Default RNG run should be 1");
+    NS_TEST_EXPECT_MSG_EQ(config.topology.islMaxRangeMeters,
+                          2000000.0,
+                          "Default ISL range should be 2000 km");
+    NS_TEST_EXPECT_MSG_EQ(config.topology.groundMaxRangeMeters,
+                          50000000.0,
+                          "Default ground-link range should be 50000 km");
+    NS_TEST_EXPECT_MSG_EQ(config.topology.refreshIntervalSeconds,
+                          30.0,
+                          "Default refresh interval should be 30 seconds");
+    NS_TEST_EXPECT_MSG_EQ(config.traffic.pingIntervalSeconds,
+                          30.0,
+                          "Default ping interval should be 30 seconds");
+    NS_TEST_EXPECT_MSG_EQ(config.traffic.pingSizeBytes,
+                          56u,
+                          "Default ping payload should be 56 bytes");
+    NS_TEST_EXPECT_MSG_EQ(config.traffic.pairs.size(),
+                          10u,
+                          "Default traffic matrix should contain all ten unordered ground-station pairs");
+    NS_TEST_EXPECT_MSG_EQ(config.attack.compromisedSatellites.size(),
+                          1u,
+                          "Default profile should contain one compromised satellite");
+    NS_TEST_EXPECT_MSG_EQ(config.attack.compromisedSatellites.front(),
+                          std::string("IRIDIUM 113"),
+                          "Default compromised satellite should be IRIDIUM 113");
+    NS_TEST_EXPECT_MSG_EQ(config.attack.targetPairs.size(),
+                          1u,
+                          "Default profile should contain one target pair");
+    NS_TEST_EXPECT_MSG_EQ(config.attack.targetPairs.front().source,
+                          std::string("Tempe"),
+                          "Default target source should be Tempe");
+    NS_TEST_EXPECT_MSG_EQ(config.attack.targetPairs.front().destination,
+                          std::string("Fairbanks"),
+                          "Default target destination should be Fairbanks");
+    NS_TEST_EXPECT_MSG_EQ(OrbitShieldTargetedFlowGrayholeDirectionToString(config.attack.direction),
+                          std::string("bidirectional"),
+                          "Default attack direction should be bidirectional");
+    NS_TEST_EXPECT_MSG_EQ(config.attack.startSeconds,
+                          600.0,
+                          "Default attack start should be 600 seconds");
+    NS_TEST_EXPECT_MSG_EQ(config.attack.stopSeconds,
+                          2400.0,
+                          "Default attack stop should be 2400 seconds");
+    NS_TEST_EXPECT_MSG_EQ(config.attack.dropProbability,
+                          1.0,
+                          "Default drop probability should be deterministic");
+    NS_TEST_EXPECT_MSG_EQ(config.detection.enabled, true, "Detector should be enabled by default");
+    NS_TEST_EXPECT_MSG_EQ(config.detection.windowSeconds,
+                          120.0,
+                          "Default detection window should be 120 seconds");
+    NS_TEST_EXPECT_MSG_EQ(config.detection.minSamples,
+                          3u,
+                          "Default detector minimum sample count should be 3");
+    NS_TEST_EXPECT_MSG_EQ(config.detection.targetPdrThreshold,
+                          0.6,
+                          "Default target PDR threshold should be 0.6");
+    NS_TEST_EXPECT_MSG_EQ(config.detection.scoreThreshold,
+                          1.0,
+                          "Default detector score threshold should be 1.0");
+    NS_TEST_EXPECT_MSG_EQ(config.mitigation.enabled, true, "Mitigation should be enabled by default");
+    NS_TEST_EXPECT_MSG_EQ(config.mitigation.applyDelaySeconds,
+                          30.0,
+                          "Default mitigation delay should be 30 seconds");
+    NS_TEST_EXPECT_MSG_EQ(config.mitigation.maxExcludedSatellites,
+                          4u,
+                          "Default mitigation exclusion cap should be 4");
+    NS_TEST_EXPECT_MSG_EQ(config.telemetry.outputDir,
+                          std::string("contrib/orbitshield/experiments/targeted-flow-grayhole/profiles/results/targeted-flow-grayhole"),
+                          "Telemetry output directory should resolve relative to the profile directory");
+    NS_TEST_EXPECT_MSG_EQ(config.telemetry.routeSnapshotIntervalSeconds,
+                          30.0,
+                          "Default route snapshot cadence should be 30 seconds");
+    NS_TEST_EXPECT_MSG_EQ(config.telemetry.writeCsv, true, "CSV telemetry should be enabled by default");
+
+    Ptr<Constellation> constellation = CreateObject<Constellation>();
+    constellation->LoadFromRingFile(config.constellation.ringFile);
+    NS_TEST_EXPECT_MSG_EQ(ValidateOrbitShieldTargetedFlowGrayholeConfig(config, constellation, &error),
+                          true,
+                          "Default profile should validate against the Iridium constellation: " << error);
+
+    char currentDirectory[PATH_MAX];
+    NS_TEST_ASSERT_MSG_NE(getcwd(currentDirectory, sizeof(currentDirectory)),
+                          nullptr,
+                          "Current working directory should be available");
+    const std::string absoluteRingFile =
+        std::string(currentDirectory) + "/contrib/orbitshield/data/iridium-20260312.yaml";
+
+    const std::string commonPrefix =
+        "constellation:\n"
+        "  ringFile: " + absoluteRingFile + "\n"
+        "simulation:\n"
+        "  durationSeconds: 900\n"
+        "topology:\n"
+        "  refreshIntervalSeconds: 30\n"
+        "traffic:\n"
+        "  pairs:\n"
+        "    - source: Tempe\n"
+        "      destination: Fairbanks\n"
+        "attack:\n"
+        "  targetPairs:\n"
+        "    - source: Tempe\n"
+        "      destination: Fairbanks\n";
+
+    const std::string oneCompromisedPath = WriteTargetedFlowGrayholeProfile(
+        CreateTempDirFilename("orbitshield-targeted-flow-grayhole-one.yaml"),
+        commonPrefix +
+            "  compromisedSatellites:\n"
+            "    - IRIDIUM 113\n"
+            "  direction: forward\n"
+            "  startSeconds: 60\n"
+            "  stopSeconds: 600\n"
+            "mitigation:\n"
+            "  enabled: false\n");
+    OrbitShieldTargetedFlowGrayholeConfig oneCompromised;
+    NS_TEST_ASSERT_MSG_EQ(LoadOrbitShieldTargetedFlowGrayholeConfig(oneCompromisedPath,
+                                                         oneCompromised,
+                                                         &error),
+                          true,
+                          "One-satellite variant should load: " << error);
+    NS_TEST_EXPECT_MSG_EQ(oneCompromised.attack.compromisedSatellites.size(),
+                          1u,
+                          "Variant should keep one compromised satellite");
+    NS_TEST_EXPECT_MSG_EQ(OrbitShieldTargetedFlowGrayholeDirectionToString(oneCompromised.attack.direction),
+                          std::string("forward"),
+                          "Variant should parse forward direction");
+    NS_TEST_EXPECT_MSG_EQ(oneCompromised.mitigation.enabled,
+                          false,
+                          "Variant should allow disabled mitigation");
+    NS_TEST_EXPECT_MSG_EQ(ValidateOrbitShieldTargetedFlowGrayholeConfig(oneCompromised, constellation, &error),
+                          true,
+                          "One-satellite variant should validate: " << error);
+
+    const std::string twoCompromisedPath = WriteTargetedFlowGrayholeProfile(
+        CreateTempDirFilename("orbitshield-targeted-flow-grayhole-two.yaml"),
+        commonPrefix +
+            "  compromisedSatellites:\n"
+            "    - IRIDIUM 113\n"
+            "    - IRIDIUM 116\n"
+            "  direction: reverse\n"
+            "  startSeconds: 30\n"
+            "  stopSeconds: 300\n"
+            "detection:\n"
+            "  minSamples: 4\n");
+    OrbitShieldTargetedFlowGrayholeConfig twoCompromised;
+    NS_TEST_ASSERT_MSG_EQ(LoadOrbitShieldTargetedFlowGrayholeConfig(twoCompromisedPath,
+                                                         twoCompromised,
+                                                         &error),
+                          true,
+                          "Two-satellite variant should load: " << error);
+    NS_TEST_EXPECT_MSG_EQ(twoCompromised.attack.compromisedSatellites.size(),
+                          2u,
+                          "Variant should parse two compromised satellites");
+    NS_TEST_EXPECT_MSG_EQ(OrbitShieldTargetedFlowGrayholeDirectionToString(twoCompromised.attack.direction),
+                          std::string("reverse"),
+                          "Variant should parse reverse direction");
+    NS_TEST_EXPECT_MSG_EQ(twoCompromised.detection.minSamples,
+                          4u,
+                          "Variant should parse detector sample override");
+    NS_TEST_EXPECT_MSG_EQ(ValidateOrbitShieldTargetedFlowGrayholeConfig(twoCompromised, constellation, &error),
+                          true,
+                          "Two-satellite variant should validate: " << error);
+
+    const std::string fourCompromisedPath = WriteTargetedFlowGrayholeProfile(
+        CreateTempDirFilename("orbitshield-targeted-flow-grayhole-four.yaml"),
+        commonPrefix +
+            "  compromisedSatellites:\n"
+            "    - IRIDIUM 113\n"
+            "    - IRIDIUM 116\n"
+            "    - IRIDIUM 120\n"
+            "    - IRIDIUM 130\n"
+            "  direction: bidirectional\n"
+            "  startSeconds: 120\n"
+            "  stopSeconds: 840\n"
+            "mitigation:\n"
+            "  maxExcludedSatellites: 4\n");
+    OrbitShieldTargetedFlowGrayholeConfig fourCompromised;
+    NS_TEST_ASSERT_MSG_EQ(LoadOrbitShieldTargetedFlowGrayholeConfig(fourCompromisedPath,
+                                                         fourCompromised,
+                                                         &error),
+                          true,
+                          "Four-satellite variant should load: " << error);
+    NS_TEST_EXPECT_MSG_EQ(fourCompromised.attack.compromisedSatellites.size(),
+                          4u,
+                          "Variant should parse four compromised satellites");
+    NS_TEST_EXPECT_MSG_EQ(fourCompromised.mitigation.maxExcludedSatellites,
+                          4u,
+                          "Variant should parse mitigation exclusion cap");
+    NS_TEST_EXPECT_MSG_EQ(ValidateOrbitShieldTargetedFlowGrayholeConfig(fourCompromised, constellation, &error),
+                          true,
+                          "Four-satellite variant should validate: " << error);
+
+    const std::string invalidDirectionPath = WriteTargetedFlowGrayholeProfile(
+        CreateTempDirFilename("orbitshield-targeted-flow-grayhole-invalid-direction.yaml"),
+        commonPrefix +
+            "  compromisedSatellites:\n"
+            "    - IRIDIUM 113\n"
+            "  direction: sideways\n"
+            "  startSeconds: 60\n"
+            "  stopSeconds: 600\n");
+    OrbitShieldTargetedFlowGrayholeConfig invalidDirection;
+    error.clear();
+    NS_TEST_EXPECT_MSG_EQ(LoadOrbitShieldTargetedFlowGrayholeConfig(invalidDirectionPath,
+                                                        invalidDirection,
+                                                        &error),
+                          false,
+                          "Invalid direction should fail cleanly");
+    NS_TEST_EXPECT_MSG_NE(error.empty(), true, "Invalid profile should provide an error message");
+
+    const std::string invalidRangePath = WriteTargetedFlowGrayholeProfile(
+        CreateTempDirFilename("orbitshield-targeted-flow-grayhole-invalid-range.yaml"),
+        commonPrefix +
+            "  compromisedSatellites:\n"
+            "    - IRIDIUM 113\n"
+            "  startSeconds: 800\n"
+            "  stopSeconds: 600\n");
+    OrbitShieldTargetedFlowGrayholeConfig invalidRange;
+    error.clear();
+    NS_TEST_EXPECT_MSG_EQ(LoadOrbitShieldTargetedFlowGrayholeConfig(invalidRangePath, invalidRange, &error),
+                          false,
+                          "Invalid attack timing should fail cleanly");
+    NS_TEST_EXPECT_MSG_NE(error.empty(), true, "Invalid timing should provide an error message");
+
+    const std::string unknownSatellitePath = WriteTargetedFlowGrayholeProfile(
+        CreateTempDirFilename("orbitshield-targeted-flow-grayhole-unknown-satellite.yaml"),
+        commonPrefix +
+            "  compromisedSatellites:\n"
+            "    - UNKNOWN SATELLITE\n"
+            "  startSeconds: 60\n"
+            "  stopSeconds: 600\n");
+    OrbitShieldTargetedFlowGrayholeConfig unknownSatellite;
+    NS_TEST_ASSERT_MSG_EQ(LoadOrbitShieldTargetedFlowGrayholeConfig(unknownSatellitePath,
+                                                         unknownSatellite,
+                                                         &error),
+                          true,
+                          "Name validation should be deferred until a constellation is loaded");
+    error.clear();
+    NS_TEST_EXPECT_MSG_EQ(ValidateOrbitShieldTargetedFlowGrayholeConfig(unknownSatellite,
+                                                            constellation,
+                                                            &error),
+                          false,
+                          "Unknown compromised satellite should fail constellation validation");
+    NS_TEST_EXPECT_MSG_NE(error.empty(), true, "Validation failure should provide an error message");
+
+    std::remove(oneCompromisedPath.c_str());
+    std::remove(twoCompromisedPath.c_str());
+    std::remove(fourCompromisedPath.c_str());
+    std::remove(invalidDirectionPath.c_str());
+    std::remove(invalidRangePath.c_str());
+    std::remove(unknownSatellitePath.c_str());
 
     Simulator::Destroy();
 }

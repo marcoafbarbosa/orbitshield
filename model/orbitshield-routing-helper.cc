@@ -16,10 +16,12 @@
 #include "ns3/attribute.h"
 #include "ns3/log.h"
 
+#include <algorithm>
 #include <queue>
 #include <sstream>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 
 namespace ns3
 {
@@ -152,12 +154,112 @@ OrbitShieldRoutingHelper::~OrbitShieldRoutingHelper()
     NS_LOG_FUNCTION(this);
 }
 
+bool
+OrbitShieldRoutingHelper::RoutePathKey::operator==(const RoutePathKey& other) const
+{
+    return sourceNodeId == other.sourceNodeId && destinationAddress == other.destinationAddress;
+}
+
+std::size_t
+OrbitShieldRoutingHelper::RoutePathKeyHash::operator()(const RoutePathKey& key) const
+{
+    return (static_cast<std::size_t>(key.sourceNodeId) << 32) ^ key.destinationAddress;
+}
+
+std::vector<Ptr<Node>>
+OrbitShieldRoutingHelper::GetRoutePath(Ptr<Node> source, Ipv4Address destination) const
+{
+    if (!source || destination == Ipv4Address::GetZero())
+    {
+        return {};
+    }
+
+    const RoutePathKey key{source->GetId(), destination.Get()};
+    auto pathIt = m_lastRoutePaths.find(key);
+    if (pathIt == m_lastRoutePaths.end())
+    {
+        return {};
+    }
+    return pathIt->second;
+}
+
+uint32_t
+OrbitShieldRoutingHelper::GetRouteHopCount(Ptr<Node> source, Ipv4Address destination) const
+{
+    const auto path = GetRoutePath(source, destination);
+    if (path.size() < 2)
+    {
+        return 0;
+    }
+    return static_cast<uint32_t>(path.size() - 1);
+}
+
+std::vector<std::string>
+OrbitShieldRoutingHelper::GetTransitSatelliteNames(Ptr<Node> source,
+                                                   Ipv4Address destination) const
+{
+    std::vector<std::string> satelliteNames;
+    const auto path = GetRoutePath(source, destination);
+    if (path.size() <= 2)
+    {
+        return satelliteNames;
+    }
+
+    for (std::size_t pathIndex = 1; pathIndex + 1 < path.size(); ++pathIndex)
+    {
+        Ptr<Satellite> satellite = DynamicCast<Satellite>(path[pathIndex]);
+        if (satellite)
+        {
+            satelliteNames.push_back(satellite->GetName());
+        }
+    }
+    return satelliteNames;
+}
+
+void
+OrbitShieldRoutingHelper::SetExcludedSatellites(const std::vector<std::string>& satelliteNames)
+{
+    m_excludedSatellites.clear();
+    for (const auto& satelliteName : satelliteNames)
+    {
+        m_excludedSatellites.insert(satelliteName);
+    }
+}
+
+void
+OrbitShieldRoutingHelper::AddExcludedSatellite(const std::string& satelliteName)
+{
+    m_excludedSatellites.insert(satelliteName);
+}
+
+void
+OrbitShieldRoutingHelper::ClearExcludedSatellites()
+{
+    m_excludedSatellites.clear();
+}
+
+std::vector<std::string>
+OrbitShieldRoutingHelper::GetExcludedSatellites() const
+{
+    std::vector<std::string> satelliteNames(m_excludedSatellites.begin(), m_excludedSatellites.end());
+    std::sort(satelliteNames.begin(), satelliteNames.end());
+    return satelliteNames;
+}
+
+bool
+OrbitShieldRoutingHelper::IsExcludedSatellite(Ptr<Node> node) const
+{
+    Ptr<Satellite> satellite = DynamicCast<Satellite>(node);
+    return satellite && m_excludedSatellites.count(satellite->GetName()) > 0;
+}
+
 void
 OrbitShieldRoutingHelper::Install(Ptr<Constellation> constellation)
 {
     NS_LOG_FUNCTION(this << constellation);
     if (!constellation)
     {
+        m_lastRoutePaths.clear();
         return;
     }
 
@@ -254,8 +356,11 @@ OrbitShieldRoutingHelper::RecomputeRoutes(Ptr<Constellation> constellation)
 
     if (nodes.empty())
     {
+        m_lastRoutePaths.clear();
         return;
     }
+
+    m_lastRoutePaths.clear();
 
     std::unordered_map<uint32_t, std::size_t> nodeIndex;
     nodeIndex.reserve(nodes.size());
@@ -277,6 +382,10 @@ OrbitShieldRoutingHelper::RecomputeRoutes(Ptr<Constellation> constellation)
         {
             LinkInterfaceInfo info;
             if (!FindLinkInterfaceInfo(link, info))
+            {
+                continue;
+            }
+            if (IsExcludedSatellite(info.a) || IsExcludedSatellite(info.b))
             {
                 continue;
             }
@@ -376,6 +485,28 @@ OrbitShieldRoutingHelper::RecomputeRoutes(Ptr<Constellation> constellation)
                     sourceRouting->AddHostRouteTo(destinationAddress,
                                                   nextHopIt->nextHop,
                                                   nextHopIt->outIf);
+
+                    std::vector<std::size_t> pathIndices;
+                    for (std::size_t pathNode = destination;;
+                         pathNode = static_cast<std::size_t>(parent[pathNode]))
+                    {
+                        pathIndices.push_back(pathNode);
+                        if (pathNode == source)
+                        {
+                            break;
+                        }
+                    }
+                    std::reverse(pathIndices.begin(), pathIndices.end());
+
+                    std::vector<Ptr<Node>> path;
+                    path.reserve(pathIndices.size());
+                    for (const auto pathIndex : pathIndices)
+                    {
+                        path.push_back(nodes[pathIndex]);
+                    }
+
+                    m_lastRoutePaths[{nodes[source]->GetId(), destinationAddress.Get()}] =
+                        std::move(path);
                 }
             }
         }

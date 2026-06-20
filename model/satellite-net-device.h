@@ -12,6 +12,8 @@
 #include "ns3/mac48-address.h"
 #include "satellite-link.h"
 
+#include "orbitshield-grayhole-policy.h"
+
 #include <vector>
 
 namespace ns3
@@ -59,6 +61,9 @@ class SatelliteNetDevice : public NetDevice
      */
     const std::vector<Ptr<SatelliteLink>>& GetLinks() const;
 
+    void SetForwardingPolicy(Ptr<OrbitShieldGrayholePolicy> policy);
+    Ptr<OrbitShieldGrayholePolicy> GetForwardingPolicy() const;
+
     bool ReceiveFromChannel(Ptr<Packet> packet,
                             const Address& source,
                             const Address& dest,
@@ -95,6 +100,7 @@ class SatelliteNetDevice : public NetDevice
 
   private:
     std::vector<Ptr<SatelliteLink>> m_links; //!< Collection of links (point-to-point satellite channels)
+    Ptr<OrbitShieldGrayholePolicy> m_forwardingPolicy; //!< Optional selective forwarding policy
     Ptr<Node> m_node;                          //!< The node this device is attached to
     Address m_address;                          //!< MAC address of this device
     uint32_t m_ifIndex;                         //!< Interface index assigned by the node

@@ -25,6 +25,7 @@ build_lib(
     model/constellation.cc
     model/ground-station.cc
     model/isl-propagation-delay-model.cc
+    model/orbitshield-grayhole-policy.cc
     model/orbitshield-routing-helper.cc
     model/orbitshield-utils.cc
     model/satellite-link.cc
@@ -35,6 +36,7 @@ build_lib(
     model/constellation.h
     model/ground-station.h
     model/isl-propagation-delay-model.h
+    model/orbitshield-grayhole-policy.h
     model/orbitshield-routing-helper.h
     model/orbitshield-utils.h
     model/satellite-link.h
@@ -43,6 +45,10 @@ build_lib(
     model/satellite.h
   LIBRARIES_TO_LINK ${libbuildings} ${libcore} ${libnetwork} ${libmobility} ${libpropagation} ${libinternet} ${libapplications} perturb
   TEST_SOURCES
+    experiments/targeted-flow-grayhole/targeted-flow-grayhole-config.cc
+    experiments/targeted-flow-grayhole/targeted-flow-grayhole-detector.cc
+    experiments/targeted-flow-grayhole/targeted-flow-grayhole-runner.cc
+    experiments/targeted-flow-grayhole/targeted-flow-grayhole-telemetry.cc
     test/test-constellation.cc
     test/test-isl.cc
     test/test-satellite.cc
@@ -51,6 +57,9 @@ build_lib(
 )
 
 target_link_libraries(${liborbitshield} PRIVATE yaml-cpp)
+if(TARGET orbitshield-test)
+  target_link_libraries(orbitshield-test yaml-cpp)
+endif()
 
 find_package(Boost COMPONENTS program_options QUIET)
 set(orbitshield_isl_visualizer_libraries ${liborbitshield})
@@ -83,4 +92,6 @@ build_exec(
         ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/orbitshield/
   INSTALL_DIRECTORY_PATH ${CMAKE_INSTALL_LIBEXECDIR}/orbitshield
 )
+
+add_subdirectory(experiments)
 

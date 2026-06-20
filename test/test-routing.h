@@ -186,4 +186,95 @@ class OrbitShieldStaticRoutingStrategyTest : public ns3::TestCase
     uint32_t m_replyCount{0};
 };
 
+/**
+ * \brief Test case for targeted-flow grayhole YAML profile loading and validation
+ */
+class OrbitShieldTargetedFlowGrayholeConfigTest : public ns3::TestCase
+{
+  public:
+    OrbitShieldTargetedFlowGrayholeConfigTest();
+    ~OrbitShieldTargetedFlowGrayholeConfigTest() override;
+
+  private:
+    void DoRun() override;
+};
+
+/**
+ * \brief Test case for current route path membership introspection
+ */
+class OrbitShieldRouteMembershipTest : public ns3::TestCase
+{
+  public:
+    OrbitShieldRouteMembershipTest();
+    ~OrbitShieldRouteMembershipTest() override;
+
+  private:
+    void DoRun() override;
+};
+
+/**
+ * \brief Test case for route-conditioned grayhole forwarding policy
+ */
+class OrbitShieldGrayholePolicyTest : public ns3::TestCase
+{
+  public:
+    OrbitShieldGrayholePolicyTest();
+    ~OrbitShieldGrayholePolicyTest() override;
+
+  private:
+    void DoRun() override;
+};
+
+/**
+ * \brief Test case for targeted-flow grayhole telemetry records and CSV artifacts
+ */
+class OrbitShieldTargetedFlowGrayholeTelemetryTest : public ns3::TestCase
+{
+  public:
+    OrbitShieldTargetedFlowGrayholeTelemetryTest();
+    ~OrbitShieldTargetedFlowGrayholeTelemetryTest() override;
+
+  private:
+    void DoRun() override;
+};
+
+/**
+ * \brief Test case for route recomputation with excluded satellites
+ */
+class OrbitShieldRouteExclusionTest : public ns3::TestCase
+{
+  public:
+    OrbitShieldRouteExclusionTest();
+    ~OrbitShieldRouteExclusionTest() override;
+
+  private:
+    void DoRun() override;
+};
+
+/**
+ * \brief Test case for deterministic targeted-flow grayhole detector scoring
+ */
+class OrbitShieldTargetedFlowGrayholeDetectorTest : public ns3::TestCase
+{
+  public:
+    OrbitShieldTargetedFlowGrayholeDetectorTest();
+    ~OrbitShieldTargetedFlowGrayholeDetectorTest() override;
+
+  private:
+    void DoRun() override;
+};
+
+/**
+ * \brief Test case for shortened deterministic targeted-flow grayhole experiment runs
+ */
+class OrbitShieldTargetedFlowGrayholeExperimentTest : public ns3::TestCase
+{
+  public:
+    OrbitShieldTargetedFlowGrayholeExperimentTest();
+    ~OrbitShieldTargetedFlowGrayholeExperimentTest() override;
+
+  private:
+    void DoRun() override;
+};
+
 #endif /* TEST_ROUTING_H */
